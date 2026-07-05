@@ -299,12 +299,12 @@ export default function ChatPane({
             );
           if (msg.role === "user")
             return (
-              <div key={i} className="ml-12 rounded-lg border border-glow/25 bg-glow/10 px-3.5 py-2.5 text-sm">
+              <div key={i} className="ml-12 break-words rounded-lg border border-glow/25 bg-glow/10 px-3.5 py-2.5 text-sm">
                 {msg.text}
               </div>
             );
           return (
-            <div key={i} className="mr-6 rounded-lg border border-card-border bg-card px-3.5 py-2.5 text-sm leading-relaxed">
+            <div key={i} className="mr-6 break-words rounded-lg border border-card-border bg-card px-3.5 py-2.5 text-sm leading-relaxed">
               {msg.text ? <Markdown text={msg.text} /> : <span className="animate-pulse text-muted">thinking…</span>}
             </div>
           );

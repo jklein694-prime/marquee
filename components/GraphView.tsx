@@ -169,7 +169,7 @@ export default function GraphView({ version }: { version: number }) {
               ×
             </button>
           </div>
-          <div className="px-4 pb-4 text-sm">
+          <div className="break-words px-4 pb-4 text-sm">
             {wiki === "loading" && <div className="text-muted">Loading…</div>}
             {wiki === "missing" && (
               <div className="text-muted">No wiki page for this node.</div>
