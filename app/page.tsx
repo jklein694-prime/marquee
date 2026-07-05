@@ -1,65 +1,146 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import ChatPane, { TraceEntry } from "@/components/ChatPane";
+import GraphView from "@/components/GraphView";
+import Watchlist from "@/components/Watchlist";
+
+const KIND_STYLE: Record<TraceEntry["kind"], string> = {
+  init: "text-muted",
+  tool: "text-foreground",
+  error: "text-ember",
+  result: "text-glow",
+};
+
+function Booth({ entries }: { entries: TraceEntry[] }) {
+  const bottomRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "auto" });
+  }, [entries]);
+
+  return (
+    <div className="h-full overflow-y-auto px-5 py-4 font-mono text-xs leading-relaxed">
+      {entries.length === 0 && (
+        <div className="mt-16 text-center text-muted">
+          Nothing on the reel yet — every tool call, vault write, and subagent
+          dispatch shows up here as the expert works.
+        </div>
+      )}
+      {entries.map((t, i) => (
+        <div key={i} className="flex gap-2 border-b border-card-border/50 py-1.5">
+          <span className="shrink-0 text-muted">{t.at}</span>
+          <span
+            className={`shrink-0 rounded px-1 ${
+              t.sub ? "bg-candle/20 text-candle" : "bg-glow/15 text-glow"
+            }`}
+          >
+            {t.sub ? "sub" : "main"}
+          </span>
+          <span className={`shrink-0 font-semibold ${KIND_STYLE[t.kind]}`}>{t.label}</span>
+          {t.detail && <span className="break-all text-muted">{t.detail}</span>}
+        </div>
+      ))}
+      <div ref={bottomRef} />
+    </div>
+  );
+}
+
+type Panel = "graph" | "watchlist" | "booth" | null;
+
+const TABS = [
+  ["graph", "Taste Graph"],
+  ["watchlist", "Watchlist"],
+  ["booth", "Projection Booth"],
+] as const;
 
 export default function Home() {
+  const [graphVersion, setGraphVersion] = useState(0);
+  const [panel, setPanel] = useState<Panel>(null);
+  const [trace, setTrace] = useState<TraceEntry[]>([]);
+  const chatSend = useRef<(text: string) => boolean>(() => false);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <main className="flex h-screen overflow-hidden">
+      <section
+        className={`flex min-w-[380px] flex-col ${
+          panel ? "w-[46%] border-r border-card-border" : "flex-1"
+        }`}
+      >
+        <header className="flex items-center gap-3 border-b border-card-border px-5 py-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icon.png" alt="Louie" className="h-8 w-8" />
+          <h1 className="text-lg font-semibold tracking-wide text-glow">
+            Marquee
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+          <span className="text-xs text-muted">your movie & TV expert</span>
+          {!panel && (
+            <span className="ml-auto flex gap-1">
+              {TABS.map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setPanel(id)}
+                  className="rounded-md px-3 py-1 text-xs text-muted transition-colors hover:bg-glow/10 hover:text-glow"
+                >
+                  {label}
+                </button>
+              ))}
+            </span>
+          )}
+        </header>
+        <ChatPane
+          onTurnEnd={() => setGraphVersion((v) => v + 1)}
+          onTrace={(t) => setTrace((prev) => [...prev, t])}
+          sendRef={chatSend}
+        />
+      </section>
+      {panel && (
+        <section className="relative flex flex-1 flex-col">
+          <div className="flex items-center gap-1 border-b border-card-border px-4 py-2">
+            {TABS.map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setPanel(id)}
+                className={`rounded-md px-3 py-1 text-xs transition-colors ${
+                  panel === id
+                    ? "bg-glow/15 text-glow"
+                    : "text-muted hover:text-foreground"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+            {panel === "graph" && (
+              <span className="ml-auto text-xs text-muted">
+                <span className="text-glow">liked</span> ·{" "}
+                <span className="text-ember">disliked</span> ·{" "}
+                <span className="text-candle">genres</span> ·{" "}
+                <span className="opacity-50 text-glow">watchlist</span>
+              </span>
+            )}
+            <button
+              onClick={() => setPanel(null)}
+              className={`rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-glow/10 hover:text-glow ${
+                panel === "graph" ? "" : "ml-auto"
+              }`}
+              title="Close panel"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+              Close
+            </button>
+          </div>
+          <div className="min-h-0 flex-1">
+            {panel === "graph" ? (
+              <GraphView version={graphVersion} />
+            ) : panel === "watchlist" ? (
+              <Watchlist
+                version={graphVersion}
+                onChat={(t) => chatSend.current(t)}
+              />
+            ) : (
+              <Booth entries={trace} />
+            )}
+          </div>
+        </section>
+      )}
+    </main>
   );
 }

@@ -32,9 +32,21 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
+
+# personal / machine-specific Claude Code state (permissions, loop state, etc.)
+.claude/settings.local.json
+.claude/*.local.*
+
+# dev/scratch artifacts (screenshots at repo root, playwright captures)
+/*.png
+/*.jpg
+/*.jpeg
+/.playwright-mcp/
+/full-page.yml
 
 # typescript
 *.tsbuildinfo

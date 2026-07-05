@@ -1,26 +1,62 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0c0a08;
+  --foreground: #e8dcc8;
+  --glow: #f5b942;
+  --card: #161210;
+  --card-border: #2a221a;
+  --ember: #b3402e;
+  --candle: #e07b39;
+  --muted: #a89d90;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-glow: var(--glow);
+  --color-card: var(--card);
+  --color-card-border: var(--card-border);
+  --color-ember: var(--ember);
+  --color-candle: var(--candle);
+  --color-muted: var(--muted);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* theater vignette — fixed overlay, never intercepts clicks; kept subtle so it
+   never swallows the chat input at the bottom edge */
+.vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 75%, rgba(0, 0, 0, 0.25));
+  z-index: 50;
+}
+
+/* soft square edge fade — no hard borders, no circles */
+.fade-edges {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 14%, black 86%, transparent),
+    linear-gradient(to bottom, transparent, black 14%, black 86%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to right, transparent, black 14%, black 86%, transparent),
+    linear-gradient(to bottom, transparent, black 14%, black 86%, transparent);
+  mask-composite: intersect;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--card-border);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
 }
