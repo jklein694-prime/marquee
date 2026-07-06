@@ -73,3 +73,42 @@ def test_profile_page_dirs_used_when_set(generic_vault):
         fh.write("PAGE_DIRS=notes\n")
     v = Vault(generic_vault)
     assert set(v.pages()) == {"Compilers", "Type Systems"}  # non-recursive
+
+
+# -- generic lint ---------------------------------------------------------------
+
+
+def test_generic_lint_universal_rules_only(generic_vault):
+    from gardener.lint import autofix_vault, lint_vault
+
+    v = Vault(generic_vault)
+    issues = lint_vault(v)
+    kinds = {(i["kind"], i["target"]) for i in issues}
+    assert ("dead_link", "Ghost Note") in kinds
+    assert ("orphan", "Bread") in kinds
+    assert ("duplicate_name", "Ideas") in kinds
+    # no hub -> no hub-section kinds ever
+    assert not any(k.endswith("_unlinked") for k, _ in kinds)
+    # no hub -> autofix is a no-op by design
+    assert autofix_vault(v) == []
+
+
+def test_generic_hub_rules_activate_via_profile(generic_vault):
+    """Hub gating is profile-driven, not marquee-specific."""
+    from gardener.lint import lint_vault
+
+    with open(os.path.join(generic_vault, "Home.md"), "w") as fh:
+        fh.write(
+            "# Home\n\n## Inbox\n\n- [[Someday Note]] — no page yet\n\n"
+            "## Themes\n\n- a bullet with no links at all\n"
+            "- linked bullet [[Compilers]]\n"
+        )
+    with open(os.path.join(generic_vault, "gardener-vault.conf"), "w") as fh:
+        fh.write(
+            "HUB=Home.md\nPAGELESS_SECTIONS=inbox\nLINKED_BULLET_SECTIONS=themes\n"
+        )
+    v = Vault(generic_vault)
+    assert "Home" not in v.pages()  # the hub is never a samplable page
+    kinds = {(i["kind"], i["target"]) for i in lint_vault(v)}
+    assert ("dead_link", "Someday Note") not in kinds  # pageless section
+    assert any(k == "themes_unlinked" for k, _ in kinds)

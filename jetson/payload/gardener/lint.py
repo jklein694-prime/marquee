@@ -1,11 +1,20 @@
-"""Port of lib/lint.ts — keep rule-for-rule parity with the TypeScript linter.
+"""Vault linter. Universal rules run on any vault; hub rules are
+profile-gated. The movie profile reproduces lib/lint.ts rule-for-rule
+(hub-only autofix scope, watchlist-pageless exclusion, taste-bullet links,
+dedupe, cap of 20).
 
-autofix_vault(): mechanical, deterministic in-place fixes (hub-only, exactly
-as upstream — widen scope only when reports show recurring patterns elsewhere).
+Universal (always):
+  dead_link        [[Target]] with no page (minus hub pageless sections)
+  orphan           page with no inbound links
+  duplicate_name   two pages share a basename; Obsidian links resolve to one
 
-lint_vault(): judgment calls the LLM works through as queue items — dead
-wikilinks (excluding watchlist titles that legitimately have no page yet),
-orphan pages, taste bullets without a [[Category]] link. Deduped, capped at 20.
+Hub-gated (profile.hub set):
+  hub dead links, hub-inbound credit for orphans, pageless sections
+  (PAGELESS_SECTIONS), and <section>_unlinked for LINKED_BULLET_SECTIONS
+  bullets carrying no [[link]] (movie profile: taste_unlinked).
+
+Only dead_link and orphan ever become queue items; the report-only kinds
+surface in `gardener lint` and the Sonnet audit evidence.
 """
 import os
 import re
@@ -28,8 +37,9 @@ def autofix_text(text):
 
 
 def autofix_vault(vault):
-    """Apply mechanical fixes to the hub; returns list of fix descriptions."""
-    if not os.path.exists(vault.hub):
+    """Mechanical fixes, hub-only (parity with lib/lint.ts; a hub-less vault
+    has no autofix in v1). Returns list of fix descriptions."""
+    if not vault.hub or not os.path.exists(vault.hub):
         return []
     before = vault.read(vault.hub)
     after = autofix_text(before)
@@ -55,14 +65,8 @@ def _hub_sections(hub_body):
 
 
 def lint_vault(vault):
-    """Issues as (kind, target, where) tuples plus human strings.
-
-    Returns a list of dicts: {kind, detail, target, where} so tasks.py can
-    turn them into queue items without re-parsing strings; detail matches the
-    upstream lint.ts message format.
-    """
-    if not os.path.exists(vault.hub):
-        return []
+    """Issues as dicts {kind, detail, target, where}; detail matches the
+    upstream lint.ts message format for the shared kinds."""
     issues = []
     seen = set()
 
@@ -75,26 +79,42 @@ def lint_vault(vault):
         )
 
     pages = vault.pages()
-    hub_body = frontmatter.body(vault.read(vault.hub))
 
-    # watchlist bullet titles legitimately have no page yet
+    for name, winner, loser in vault.duplicates:
+        add(
+            "duplicate_name",
+            "duplicate page name '%s': %s shadows %s" % (name, winner, loser),
+            target=name,
+            where=loser,
+        )
+
+    # -- hub rules (profile-gated) --------------------------------------------
     pageless = set()
-    for heading, bullets in _hub_sections(hub_body):
-        if heading.startswith("watchlist"):
-            for b in bullets:
-                links = wikilinks(b)
-                if links:
-                    pageless.add(links[0])
-        elif heading.startswith("taste"):
-            for b in bullets:
-                if not wikilinks(b):
-                    add(
-                        "taste_unlinked",
-                        'taste bullet has no [[Category]] links: "%s"' % b[:80],
-                        target=b[:80],
-                        where="hub",
-                    )
+    hub_body = None
+    if vault.hub and os.path.exists(vault.hub):
+        hub_body = frontmatter.body(vault.read(vault.hub))
+        profile = vault.profile
+        for heading, bullets in _hub_sections(hub_body):
+            if any(heading.startswith(s) for s in profile.pageless_sections):
+                for b in bullets:
+                    links = wikilinks(b)
+                    if links:
+                        pageless.add(links[0])
+            elif any(heading.startswith(s) for s in profile.linked_bullet_sections):
+                section = next(
+                    s for s in profile.linked_bullet_sections if heading.startswith(s)
+                )
+                for b in bullets:
+                    if not wikilinks(b):
+                        add(
+                            "%s_unlinked" % section,
+                            '%s bullet has no [[Category]] links: "%s"'
+                            % (section, b[:80]),
+                            target=b[:80],
+                            where="hub",
+                        )
 
+    # -- universal rules --------------------------------------------------------
     linked = set()
 
     def scan(text, where):
@@ -108,8 +128,9 @@ def lint_vault(vault):
                     where=where,
                 )
 
-    scan(hub_body, "hub")
-    for path in vault.page_files():
+    if hub_body is not None:
+        scan(hub_body, "hub")
+    for path in sorted(pages.values(), key=lambda p: vault.relpath(p)):
         scan(vault.read(path), os.path.basename(path))
 
     for name in pages:

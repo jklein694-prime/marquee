@@ -3,6 +3,7 @@ most ONE small thing, commits it, and exits. One writer, no races, save as
 you go — the discipline is borrowed from the movie-expert skill; the timer
 provides the loop and the duty cycle.
 """
+import os
 import time
 
 from . import lint, llm, sample, tasks
@@ -96,7 +97,11 @@ def run_once(cfg, dry_run=False, rng=None, today=None):
     logged = _daily_log(vault, git, state, today, dry_run)
 
     # -- mechanical autofix is a full cycle's work when it fires ------------
-    hub_text = vault.read(vault.hub)
+    hub_text = (
+        vault.read(vault.hub)
+        if vault.hub and os.path.exists(vault.hub)
+        else ""
+    )
     if lint.autofix_text(hub_text) != hub_text:
         if dry_run:
             return _status("would_autofix")
