@@ -37,7 +37,14 @@ export function OptionPicker({
   onSelect: (text: string) => void;
 }) {
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [comment, setComment] = useState("");
   const inert = answered || locked;
+
+  const confirm = () => {
+    const note = comment.trim();
+    const sel = [...picked].join(", ");
+    if (sel || note) onSelect(sel && note ? `${sel} — ${note}` : sel || note);
+  };
 
   const toggle = (label: string) => {
     if (inert) return;
@@ -76,13 +83,22 @@ export function OptionPicker({
         ))}
       </div>
       {data.mode === "multi" && !answered && (
-        <button
-          onClick={() => picked.size && onSelect([...picked].join(", "))}
-          disabled={!picked.size || locked}
-          className="mt-3 rounded-md border border-glow/60 px-3 py-1 text-sm text-glow hover:bg-glow/10 disabled:opacity-40"
-        >
-          Confirm
-        </button>
+        <>
+          <input
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            disabled={locked}
+            placeholder="Anything else? Steer me… (optional)"
+            className="mt-3 w-full rounded-md border border-card-border bg-background px-2 py-1.5 text-xs outline-none placeholder:text-muted focus:border-glow/60"
+          />
+          <button
+            onClick={confirm}
+            disabled={(!picked.size && !comment.trim()) || locked}
+            className="mt-2 rounded-md border border-glow/60 px-3 py-1 text-sm text-glow hover:bg-glow/10 disabled:opacity-40"
+          >
+            Confirm
+          </button>
+        </>
       )}
       {locked && !answered && (
         <div className="mt-2 animate-pulse text-xs text-muted">
@@ -107,6 +123,7 @@ export function MovieChecklist({
   const inert = answered || locked;
   // per movie: undefined = untouched, null = seen but unrated, number = rating
   const [seen, setSeen] = useState<Record<string, number | null | undefined>>({});
+  const [comment, setComment] = useState("");
 
   const label = (m: ChecklistData["movies"][number]) =>
     m.year ? `${m.title} (${m.year})` : m.title;
@@ -127,7 +144,9 @@ export function MovieChecklist({
       );
     if (unseenList.length)
       parts.push("Haven't seen: " + unseenList.map(label).join("; "));
-    onSubmit(parts.join(". ") || "Haven't seen any of these.");
+    if (!parts.length) parts.push("Haven't seen any of these.");
+    if (comment.trim()) parts.push(comment.trim());
+    onSubmit(parts.join(". "));
   };
 
   return (
@@ -179,13 +198,22 @@ export function MovieChecklist({
         })}
       </div>
       {!answered && (
-        <button
-          onClick={submit}
-          disabled={locked}
-          className="mt-3 rounded-md border border-glow/60 px-3 py-1 text-sm text-glow hover:bg-glow/10 disabled:opacity-40"
-        >
-          Confirm
-        </button>
+        <>
+          <input
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            disabled={locked}
+            placeholder="Anything else? Steer me… (optional)"
+            className="mt-3 w-full rounded-md border border-card-border bg-background px-2 py-1.5 text-xs outline-none placeholder:text-muted focus:border-glow/60"
+          />
+          <button
+            onClick={submit}
+            disabled={locked}
+            className="mt-2 rounded-md border border-glow/60 px-3 py-1 text-sm text-glow hover:bg-glow/10 disabled:opacity-40"
+          >
+            Confirm
+          </button>
+        </>
       )}
       {locked && !answered && (
         <div className="mt-2 animate-pulse text-xs text-muted">

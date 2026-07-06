@@ -52,6 +52,9 @@ type Msg =
   | { role: "widget"; widget: "checklist"; data: ChecklistData; answered: boolean }
   | { role: "widget"; widget: "recs"; data: RecsData };
 
+// onDone fires after the message's turn actually completes (queued or not)
+export type ChatSend = (text: string, onDone?: () => void) => "sent" | "queued" | false;
+
 export interface TraceEntry {
   kind: "init" | "tool" | "error" | "result";
   sub?: boolean;
@@ -73,6 +76,18 @@ function activityLabel(t: { kind: string; sub?: boolean; label: string }): strin
   if (n.startsWith("mcp__ui")) return "preparing options…";
   return "working…";
 }
+
+// rotated in the busy bar while the expert thinks
+const TIPS = [
+  "log what you watched from the Watchlist tab — even mid-chat, it queues up",
+  "hit Not now on a suggestion to shelve it for a couple of weeks",
+  "tell Louie which streaming services you have — picks will respect them",
+  "widgets have a note box — rate movies AND steer (“go older”) in one reply",
+  "say “something different” to break out of your usual taste gravity",
+  "ask “analyze my taste” every few logs to sharpen your profile",
+  "the Taste Graph tab shows why picks connect to what you loved",
+  "the Projection Booth tab shows every move the expert makes, live",
+];
 
 // inline SVG hero with a cursor-proximity glimmer: triangles near the pointer
 // brighten a touch above their own shade, fading back to normal ~2 triangles out
@@ -164,27 +179,43 @@ export default function ChatPane({
 }: {
   onTurnEnd: () => void;
   onTrace: (t: TraceEntry) => void;
-  sendRef?: MutableRefObject<(text: string) => boolean>;
+  sendRef?: MutableRefObject<ChatSend>;
 }) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [activity, setActivity] = useState("thinking…");
+  const [tipIdx, setTipIdx] = useState(0);
   const sessionRef = useRef<string | undefined>(undefined);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // busy mirrored in a ref (state is stale inside sendRef closures) + a FIFO of
+  // messages that arrived mid-turn — nothing sent while busy is ever dropped
+  const busyRef = useRef(false);
+  const queueRef = useRef<{ text: string; onDone?: () => void }[]>([]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
   }, [messages]);
 
-  function send(text: string): boolean {
-    if (!text.trim() || busy) return false;
-    void run(text);
-    return true;
-  }
+  useEffect(() => {
+    if (!busy) return;
+    const id = setInterval(() => setTipIdx((i) => (i + 1) % TIPS.length), 6000);
+    return () => clearInterval(id);
+  }, [busy]);
+
+  const send: ChatSend = (text, onDone) => {
+    if (!text.trim()) return false;
+    if (busyRef.current) {
+      queueRef.current.push({ text, onDone });
+      return "queued";
+    }
+    void run(text, onDone);
+    return "sent";
+  };
   if (sendRef) sendRef.current = send;
 
-  async function run(text: string) {
+  async function run(text: string, onDone?: () => void) {
+    busyRef.current = true;
     setBusy(true);
     setActivity("thinking…");
     setMessages((m) => [
@@ -256,10 +287,17 @@ export default function ChatPane({
         }
       }
     } finally {
-      setBusy(false);
+      onDone?.();
       onTurnEnd();
       // drop empty assistant bubbles (e.g. turn ended on a widget)
       setMessages((m) => m.filter((msg) => !(msg.role === "assistant" && !msg.text.trim())));
+      const next = queueRef.current.shift();
+      if (next) {
+        void run(next.text, next.onDone); // drain — busy stays up across the queue
+      } else {
+        busyRef.current = false;
+        setBusy(false);
+      }
     }
   }
 
@@ -318,6 +356,9 @@ export default function ChatPane({
             <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-glow" />
           </span>
           <span className="text-xs text-glow/90">{activity}</span>
+          <span className="ml-auto min-w-0 truncate pl-3 text-[11px] text-muted">
+            tip: {TIPS[tipIdx]}
+          </span>
         </div>
       )}
       <form

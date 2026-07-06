@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { WatchItem } from "@/lib/watchlist";
+import type { ChatSend } from "./ChatPane";
+
+const EXCLUDED_KEY = "marquee-excluded-services";
 
 function trailerHref(item: WatchItem): string {
   return (
@@ -73,6 +76,7 @@ function Card({
   item,
   controls,
   reviewing,
+  pending,
   onReview,
   onReviewSubmit,
   onReviewCancel,
@@ -81,6 +85,7 @@ function Card({
   item: WatchItem;
   controls: React.ReactNode;
   reviewing: boolean;
+  pending?: boolean;
   onReview: () => void;
   onReviewSubmit: (rating: number, review: string) => void;
   onReviewCancel: () => void;
@@ -142,17 +147,23 @@ function Card({
             >
               Trailer
             </a>
-            <button
-              onClick={onReview}
-              className="rounded-md border border-card-border px-2 py-0.5 text-[11px] text-muted hover:border-glow/60 hover:text-glow"
-            >
-              Watched it
-            </button>
+            {pending ? (
+              <span className="animate-pulse rounded-md border border-glow/40 px-2 py-0.5 text-[11px] text-glow">
+                logging…
+              </span>
+            ) : (
+              <button
+                onClick={onReview}
+                className="rounded-md border border-card-border px-2 py-0.5 text-[11px] text-muted hover:border-glow/60 hover:text-glow"
+              >
+                Watched it
+              </button>
+            )}
             {controls}
           </div>
         </div>
       </div>
-      {reviewing && (
+      {reviewing && !pending && (
         <ReviewForm item={item} onSubmit={onReviewSubmit} onCancel={onReviewCancel} />
       )}
     </div>
@@ -164,13 +175,38 @@ export default function Watchlist({
   onChat,
 }: {
   version: number;
-  onChat: (text: string) => boolean;
+  onChat: ChatSend;
 }) {
   const [user, setUser] = useState<WatchItem[]>([]);
   const [suggestions, setSuggestions] = useState<WatchItem[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [reviewing, setReviewing] = useState<string | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [pending, setPending] = useState<Set<string>>(new Set());
+  // services the user unchecked — stored as exclusions so new services default on
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    try {
+      setExcluded(new Set(JSON.parse(localStorage.getItem(EXCLUDED_KEY) ?? "[]")));
+    } catch {}
+  }, []);
+
+  function toggleService(s: string) {
+    setExcluded((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) next.delete(s);
+      else next.add(s);
+      localStorage.setItem(EXCLUDED_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  }
+
+  const services = [...new Set([...user, ...suggestions].flatMap((i) => i.streaming ?? []))].sort();
+  // view-only filter: hide items available ONLY on excluded services; items with
+  // no streaming data always show, and nothing is ever removed from the data
+  const visible = (i: WatchItem) =>
+    !i.streaming?.length || i.streaming.some((s) => !excluded.has(s));
 
   const refetch = useCallback(() => {
     fetch("/api/watchlist")
@@ -197,17 +233,49 @@ export default function Watchlist({
   function markWatched(item: WatchItem, rating: number, review: string) {
     const year =
       item.year && !item.title.includes(`(${item.year})`) ? ` (${item.year})` : "";
-    const sent = onChat(
-      `I watched ${item.title}${year} — ${rating}/10.${review ? ` ${review}` : ""}`
+    // busy chat = queued, not dropped; the item is only removed once its log
+    // message actually ran (a reload mid-queue leaves it on the list — safe)
+    const result = onChat(
+      `I watched ${item.title}${year} — ${rating}/10.${review ? ` ${review}` : ""}`,
+      () => {
+        void post({ action: "remove", title: item.title });
+        setPending((p) => {
+          const next = new Set(p);
+          next.delete(item.title);
+          return next;
+        });
+      }
     );
-    if (sent) {
+    if (result) {
       setReviewing(null);
-      post({ action: "remove", title: item.title });
+      setPending((p) => new Set(p).add(item.title));
     }
   }
 
   return (
     <div className="h-full space-y-5 overflow-y-auto px-5 py-4">
+      {services.length > 0 && (
+        <section>
+          <div className="mb-1.5 text-xs text-muted">
+            My services — uncheck what you don&apos;t pay for to hide those picks (view only)
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {services.map((s) => (
+              <button
+                key={s}
+                onClick={() => toggleService(s)}
+                className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                  excluded.has(s)
+                    ? "border-card-border text-muted opacity-60"
+                    : "border-glow/50 bg-glow/15 text-glow"
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
       <section>
         <div className="mb-2 text-sm font-medium text-glow">My watchlist</div>
         <div className="mb-2 text-xs text-muted">
@@ -220,10 +288,12 @@ export default function Watchlist({
           </div>
         )}
         <div className="space-y-2">
-          {user.map((item, i) => (
+          {/* map (not filter) keeps i as the real list index for move/drag */}
+          {user.map((item, i) => visible(item) && (
             <Card
               key={item.title}
               item={item}
+              pending={pending.has(item.title)}
               reviewing={reviewing === item.title}
               onReview={() =>
                 setReviewing(reviewing === item.title ? null : item.title)
@@ -290,10 +360,11 @@ export default function Watchlist({
           </div>
         )}
         <div className="space-y-2">
-          {suggestions.map((item) => (
+          {suggestions.filter(visible).map((item) => (
             <Card
               key={item.title}
               item={item}
+              pending={pending.has(item.title)}
               reviewing={reviewing === item.title}
               onReview={() =>
                 setReviewing(reviewing === item.title ? null : item.title)
@@ -301,20 +372,29 @@ export default function Watchlist({
               onReviewSubmit={(r, txt) => markWatched(item, r, txt)}
               onReviewCancel={() => setReviewing(null)}
               controls={
-                <button
-                  onClick={() =>
-                    post({
-                      action: "add",
-                      title: item.title,
-                      year: item.year,
-                      media: item.media,
-                      note: item.note,
-                    })
-                  }
-                  className="rounded-md border border-glow/50 px-2 py-0.5 text-[11px] text-glow hover:bg-glow/10"
-                >
-                  + My watchlist
-                </button>
+                <>
+                  <button
+                    onClick={() =>
+                      post({
+                        action: "add",
+                        title: item.title,
+                        year: item.year,
+                        media: item.media,
+                        note: item.note,
+                      })
+                    }
+                    className="rounded-md border border-glow/50 px-2 py-0.5 text-[11px] text-glow hover:bg-glow/10"
+                  >
+                    + My watchlist
+                  </button>
+                  <button
+                    onClick={() => post({ action: "snooze", title: item.title })}
+                    title="Hide this suggestion for a couple of weeks"
+                    className="rounded-md border border-card-border px-2 py-0.5 text-[11px] text-muted hover:border-ember/60 hover:text-ember"
+                  >
+                    Not now
+                  </button>
+                </>
               }
             />
           ))}

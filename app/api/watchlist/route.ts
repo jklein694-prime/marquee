@@ -5,6 +5,7 @@ import {
   hubSuggestions,
   enrich,
   refreshStale,
+  snoozeTitle,
   WatchItem,
 } from "@/lib/watchlist";
 
@@ -50,6 +51,10 @@ export async function POST(request: NextRequest) {
       items.splice(i, 1);
       writeUserList(items);
     }
+  } else if (body.action === "snooze") {
+    if (!body.title)
+      return NextResponse.json({ error: "missing title" }, { status: 400 });
+    snoozeTitle(String(body.title));
   } else if (body.action === "move") {
     const i = idx(body.title);
     const to = Math.max(0, Math.min(items.length - 1, Number(body.to)));

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import ChatPane, { TraceEntry } from "@/components/ChatPane";
+import ChatPane, { ChatSend, TraceEntry } from "@/components/ChatPane";
 import GraphView from "@/components/GraphView";
 import Watchlist from "@/components/Watchlist";
 
@@ -57,7 +57,7 @@ export default function Home() {
   const [graphVersion, setGraphVersion] = useState(0);
   const [panel, setPanel] = useState<Panel>(null);
   const [trace, setTrace] = useState<TraceEntry[]>([]);
-  const chatSend = useRef<(text: string) => boolean>(() => false);
+  const chatSend = useRef<ChatSend>(() => false);
 
   return (
     <main className="flex h-screen overflow-hidden">
@@ -133,7 +133,7 @@ export default function Home() {
             ) : panel === "watchlist" ? (
               <Watchlist
                 version={graphVersion}
-                onChat={(t) => chatSend.current(t)}
+                onChat={(t, onDone) => chatSend.current(t, onDone)}
               />
             ) : (
               <Booth entries={trace} />

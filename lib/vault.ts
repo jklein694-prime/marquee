@@ -6,8 +6,8 @@ import { WIKILINK, wikilinks } from "./wikilink";
 // Vault location is configurable: set VAULT_PATH in .env.local (install.sh does this).
 // Falls back to a ./vault folder in the project so the app still boots with an empty graph.
 export const VAULT = process.env.VAULT_PATH || path.join(process.cwd(), "vault");
-const MOVIES_DIR = path.join(VAULT, "wiki/movies");
-const GENRES_DIR = path.join(MOVIES_DIR, "genres");
+export const MOVIES_DIR = path.join(VAULT, "wiki/movies");
+export const GENRES_DIR = path.join(MOVIES_DIR, "genres");
 export const HUB = path.join(VAULT, "wiki/entities/Movies.md");
 
 export type NodeKind = "movie" | "genre" | "watchlist" | "taste";
@@ -25,7 +25,7 @@ export interface GraphLink {
 
 export { WIKILINK, wikilinks };
 
-function mdFiles(dir: string): string[] {
+export function mdFiles(dir: string): string[] {
   if (!fs.existsSync(dir)) return [];
   return fs
     .readdirSync(dir)
@@ -133,7 +133,9 @@ export function buildGraph(): { nodes: GraphNode[]; links: GraphLink[] } {
         .map((l) => l.replace(/^\s*-\s+/, "").trim());
       if (heading.startsWith("taste")) {
         for (const b of bullets) {
-          const clean = b.replace(WIKILINK, "$1"); // display without [[ ]] syntax
+          // display without [[ ]] syntax or inline markdown (**bold** etc. would
+          // otherwise leak into node labels)
+          const clean = b.replace(WIKILINK, "$1").replace(/[*_`]/g, "").trim();
           const id = `taste: ${clean.slice(0, 40)}`;
           addNode({ id, label: clean.slice(0, 40), kind: "taste" });
           for (const target of wikilinks(b)) {

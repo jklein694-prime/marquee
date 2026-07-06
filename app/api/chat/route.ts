@@ -1,10 +1,19 @@
 import { runTurn } from "@/lib/agent";
+import { autofixVault, consumeLintReport, lintVault, writeLintReport } from "@/lib/lint";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 600;
 
 export async function POST(req: Request) {
-  const { message, sessionId } = await req.json();
+  const { message: rawMessage, sessionId } = await req.json();
+  // pending lint issues from the last turn ride along for the agent to fix
+  let lint = "";
+  try {
+    lint = consumeLintReport();
+  } catch {}
+  const message = lint
+    ? `${rawMessage}\n\n<wiki-lint>\n${lint}\n</wiki-lint>`
+    : rawMessage;
   const enc = new TextEncoder();
 
   const stream = new ReadableStream({
@@ -116,6 +125,12 @@ export async function POST(req: Request) {
       } catch (err) {
         emit({ type: "text", delta: `\n\n_(error: ${err instanceof Error ? err.message : String(err)})_` });
       } finally {
+        // intermittent wiki lint: mechanical fixes now, judgment calls queued
+        // for the agent's next turn — never let lint break the stream
+        try {
+          autofixVault();
+          writeLintReport(lintVault());
+        } catch {}
         emit({ type: "done", sessionId: sid });
         controller.close();
       }

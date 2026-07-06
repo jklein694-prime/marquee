@@ -18,6 +18,31 @@ export interface WatchItem {
 }
 
 const FILE = path.join(process.cwd(), "data/watchlist.json");
+const SNOOZE_FILE = path.join(process.cwd(), "data/snoozed.json");
+const SNOOZE_MS = 14 * 24 * 60 * 60 * 1000;
+
+// snoozed suggestions: lowercased title → expiry epoch-ms; expired entries are
+// pruned on read so a snooze quietly lapses and the suggestion resurfaces
+function readSnoozes(): Record<string, number> {
+  if (!fs.existsSync(SNOOZE_FILE)) return {};
+  try {
+    const all = JSON.parse(fs.readFileSync(SNOOZE_FILE, "utf8")) as Record<string, number>;
+    const now = Date.now();
+    const live = Object.fromEntries(Object.entries(all).filter(([, t]) => t > now));
+    if (Object.keys(live).length !== Object.keys(all).length)
+      fs.writeFileSync(SNOOZE_FILE, JSON.stringify(live, null, 2));
+    return live;
+  } catch {
+    return {};
+  }
+}
+
+export function snoozeTitle(title: string) {
+  const snoozes = readSnoozes();
+  snoozes[title.toLowerCase()] = Date.now() + SNOOZE_MS;
+  fs.mkdirSync(path.dirname(SNOOZE_FILE), { recursive: true });
+  fs.writeFileSync(SNOOZE_FILE, JSON.stringify(snoozes, null, 2));
+}
 
 export function readUserList(): WatchItem[] {
   if (!fs.existsSync(FILE)) return [];
@@ -37,12 +62,13 @@ export function hubSuggestions(): WatchItem[] {
     .split(/^## /m)
     .find((s) => s.split("\n", 1)[0].toLowerCase().startsWith("watchlist"));
   if (!section) return [];
+  const snoozed = readSnoozes();
   const items: WatchItem[] = [];
   for (const line of section.split("\n")) {
     if (!/^\s*-\s+\S/.test(line) || line.includes("(empty")) continue;
     const bullet = line.replace(/^\s*-\s+/, "").trim();
     const title = wikilinks(bullet)[0] ?? bullet.split(" — ")[0].trim();
-    if (!title) continue;
+    if (!title || snoozed[title.toLowerCase()]) continue;
     const clean = bullet.replace(WIKILINK, "$1");
     const note = clean.startsWith(title)
       ? clean.slice(title.length).replace(/^\s*[—–-]\s*/, "")
