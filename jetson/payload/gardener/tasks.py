@@ -28,8 +28,13 @@ def _template(name):
         return fh.read()
 
 
-def system_prompt():
-    return _template("system").strip()
+def system_prompt(vault):
+    """The fixed system prompt, with the vault's own domain description
+    injected by token replacement (the template holds literal JSON braces,
+    so str.format is off the table)."""
+    desc = vault.profile.vault_description
+    blurb = " This wiki is %s." % desc.rstrip(".") if desc else ""
+    return _template("system").replace("__VAULT_DESCRIPTION__", blurb).strip()
 
 
 def _truncate(text, limit):
@@ -142,6 +147,8 @@ def _where_file(vault, item):
     or a vault-relative path."""
     where = item.get("where", "")
     if where == "hub":
+        if not vault.hub:
+            raise TaskRenderError("item names the hub but the vault has none")
         return vault.hub
     pages = vault.pages()
     base = os.path.splitext(os.path.basename(where))[0]
@@ -160,18 +167,33 @@ def render(vault, state, item):
 
     if task_type == "dead_link":
         path = _where_file(vault, item)
+        profile = vault.profile
+        source_rel = vault.relpath(path)
+        # stub placement: the profile's default kind, else beside the linking
+        # page ("auto"). A hub-located dead link in a kind-less vault has no
+        # sane stub home, so that option is withheld from the model entirely.
+        context = {"target": item["target"]}
+        if profile.stub_default and profile.stub_default in profile.stub_kinds:
+            context["stub_dir"] = profile.stub_default
+        elif not profile.stub_kinds and item.get("where") != "hub":
+            context["stub_dir"] = "auto"
+            context["source"] = source_rel
+        stub_option = (
+            '- create_stub: if [[{target}]] deserves its own page ("target" '
+            'must be exactly "{target}", "text" is a one-line description '
+            "based only on context shown).\n".format(target=item["target"])
+            if "stub_dir" in context
+            else ""
+        )
         user = _template("dead_link").format(
             target=item["target"],
             where=item["where"],
-            file=vault.relpath(path),
+            file=source_rel,
             page=_page_excerpt(vault, path),
             pages=pages_line,
+            stub_option=stub_option,
         )
-        # stubs for dead links land next to movies unless the dead target is
-        # linked from genre frontmatter/bodies as a category — keep it simple:
-        # movies by default, the audit can reclassify
-        context = {"target": item["target"], "stub_dir": "movies"}
-        return system_prompt(), user, context
+        return system_prompt(vault), user, context
 
     if task_type == "orphan":
         pages = vault.pages()
@@ -180,13 +202,26 @@ def render(vault, state, item):
             raise TaskRenderError("orphan page vanished: %r" % name)
         neighbors = sample.pick_neighbors(vault, state, name)
         if not neighbors:
-            # nothing links it and it links nothing: offer the closest genre
-            # pages as adoption candidates instead
-            neighbors = [
-                n
-                for n in sorted(pages)
-                if vault.relpath(pages[n]).startswith("wiki/movies/genres/")
-            ][:3]
+            # nothing links it and it links nothing: offer the profile's
+            # category dirs as adoption candidates, else its sibling pages
+            profile = vault.profile
+            if profile.category_dirs:
+                candidates = [
+                    n
+                    for n in sorted(pages)
+                    if any(
+                        vault.relpath(pages[n]).startswith(d.rstrip("/") + "/")
+                        for d in profile.category_dirs
+                    )
+                ]
+            else:
+                own_dir = os.path.dirname(pages[name])
+                candidates = [
+                    n
+                    for n in sorted(pages)
+                    if n != name and os.path.dirname(pages[n]) == own_dir
+                ]
+            neighbors = candidates[:3]
         user = _template("orphan").format(
             target=name,
             orphan_file=vault.relpath(pages[name]),
@@ -194,7 +229,7 @@ def render(vault, state, item):
             neighbors=_neighbors_block(vault, neighbors),
             pages=pages_line,
         )
-        return system_prompt(), user, {"target": name}
+        return system_prompt(vault), user, {"target": name}
 
     if task_type in ("enrich", "stale"):
         pages = vault.pages()
@@ -208,7 +243,7 @@ def render(vault, state, item):
             neighbors=_neighbors_block(vault, neighbors),
             pages=pages_line,
         )
-        return system_prompt(), user, {}
+        return system_prompt(vault), user, {}
 
     if task_type == "correction":
         rel = item["target"]
@@ -221,6 +256,6 @@ def render(vault, state, item):
             page=_page_excerpt(vault, resolved),
             pages=pages_line,
         )
-        return system_prompt(), user, {}
+        return system_prompt(vault), user, {}
 
     raise TaskRenderError("unknown task type: %r" % task_type)

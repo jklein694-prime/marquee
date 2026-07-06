@@ -21,7 +21,9 @@ def _status(outcome, **details):
 
 def _daily_log(vault, git, state, today, dry_run):
     """First cycle of a new day: prepend yesterday's one-line summary to
-    wiki/log.md (only when something changed yesterday)."""
+    the profile's log file (skipped entirely for vaults without one)."""
+    if not vault.log or not os.path.exists(vault.log):
+        return None
     if state.get("_last_log_date") == today:
         return None
     if dry_run:

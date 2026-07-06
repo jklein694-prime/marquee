@@ -1,6 +1,6 @@
 Task: enrich one neighborhood of the wiki. Below is a page and some of its linked neighbors. Make ONE small improvement, judged strictly from what these pages already say:
 
-- add_link: one genuinely justified new [[link]] between two of these pages (a shared genre, director, era, theme that both pages state).
+- add_link: one genuinely justified new [[link]] between two of these pages (a shared topic, attribute, or theme that both pages state).
 - replace_line: one line that is stale, redundant, or contradicted by the other pages, rewritten.
 - remove_line: one bullet that duplicates another or is contradicted.
 - no_change: perfectly fine if the neighborhood is already tight. Most neighborhoods are.

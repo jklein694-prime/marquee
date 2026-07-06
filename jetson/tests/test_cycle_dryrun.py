@@ -213,6 +213,84 @@ def test_dry_run_makes_no_writes(cfg, git_vault, mock_llama):
     assert WorkQueue(cfg.queue_dir).counts()["pending"] == 0
 
 
+# -- generic (profile-less) vault cycles ------------------------------------------
+
+
+@pytest.fixture
+def generic_cfg(git_generic_vault, tmp_path, mock_llama):
+    return Config(
+        path="/nonexistent",
+        overrides={
+            "VAULT_DIR": git_generic_vault,
+            "QUEUE_DIR": str(tmp_path / "gqueue"),
+            "STATE_FILE": str(tmp_path / "gstate.json"),
+            "LLAMA_URL": mock_llama.url,
+            "COOLDOWN_DAYS": "0",
+            "LLM_TIMEOUT_SEC": "5",
+        },
+    )
+
+
+def test_generic_cycle_applies_without_hub_or_log(generic_cfg, git_generic_vault, mock_llama):
+    """No hub, no log, no profile — the daemon must neither crash nor skip."""
+    anchor = "Parsing feeds [[Type Systems]]. See [[Ideas]] and [[Ghost Note]]."
+    mock_llama.responses.append(
+        json.dumps(
+            {
+                "action": "retarget_link",
+                "file": "notes/Compilers.md",
+                "anchor": anchor,
+                "target": "Type Systems",
+                "reason": "closest existing page",
+            }
+        )
+    )
+    result = run(generic_cfg)  # empty queue -> refills from lint -> dead link first
+    assert result["outcome"] == "applied"
+    assert result["action"] == "retarget_link"
+    git = Git(git_generic_vault)
+    assert not git.dirty()
+    assert "gardener(dead_link)" in git.log_since("", "--oneline")
+    text = Vault(git_generic_vault).read(
+        os.path.join(git_generic_vault, "notes", "Compilers.md")
+    )
+    assert "Ghost Note" not in text
+
+
+def test_generic_system_prompt_has_no_movie_wording(generic_cfg, git_generic_vault, mock_llama):
+    run(generic_cfg)
+    prompt = mock_llama.requests[0]["prompt"]
+    assert "movie" not in prompt.lower()
+    assert "__VAULT_DESCRIPTION__" not in prompt
+
+
+def test_description_token_injected_when_profiled(generic_cfg, git_generic_vault, mock_llama):
+    with open(os.path.join(git_generic_vault, "gardener-vault.conf"), "w") as fh:
+        fh.write('VAULT_DESCRIPTION="a lab notebook about compilers"\n')
+    Git(git_generic_vault).commit_all("add profile")
+    run(generic_cfg)
+    assert "a lab notebook about compilers" in mock_llama.requests[0]["prompt"]
+
+
+def test_generic_auto_stub_cycle(generic_cfg, git_generic_vault, mock_llama):
+    mock_llama.responses.append(
+        json.dumps(
+            {
+                "action": "create_stub",
+                "target": "Ghost Note",
+                "text": "Placeholder created for a dead link.",
+                "reason": "the page is referenced but missing",
+            }
+        )
+    )
+    result = run(generic_cfg)
+    assert result["outcome"] == "applied"
+    assert result["action"] == "create_stub"
+    stub = os.path.join(git_generic_vault, "notes", "Ghost Note.md")
+    assert os.path.exists(stub)  # beside the page that links it
+    assert not os.path.exists(os.path.join(git_generic_vault, ".vault-meta"))
+
+
 def test_cli_run_once_and_status(cfg, capsys, monkeypatch, tmp_path):
     import gardener.__main__ as cli
 
