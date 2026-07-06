@@ -23,9 +23,9 @@ def _daily_log(vault, git, state, today, dry_run):
     wiki/log.md (only when something changed yesterday)."""
     if state.get("_last_log_date") == today:
         return None
-    state["_last_log_date"] = today
     if dry_run:
-        return None
+        return None  # don't mark the day logged without writing the entry
+    state["_last_log_date"] = today
     yesterday = time.strftime(
         "%Y-%m-%d", time.localtime(time.time() - 86400)
     )

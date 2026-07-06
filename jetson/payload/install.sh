@@ -86,7 +86,6 @@ MODEL_FILE=$MODEL_FILE
 CTX=$(sed -n 's/^CTX=//p' "$ETC/gardener.conf" | head -1)
 LLAMA_VARIANT=$LLAMA_VARIANT
 LLAMA_EXTRA_ARGS=$LLAMA_EXTRA_ARGS
-MEMORY_MAX=$MEMORY_MAX
 EOF
 echo "   tier=$TIER variant=$LLAMA_VARIANT"
 
@@ -114,7 +113,8 @@ fi
 # --- 4. systemd ------------------------------------------------------------------
 echo "== installing services"
 INTERVAL_MIN="$(sed -n 's/^INTERVAL_MIN=//p' "$ETC/gardener.conf" | head -1)"
-cp "$PAYLOAD_DIR/systemd/llama-server.service" /etc/systemd/system/
+sed "s/__MEMORY_MAX__/$MEMORY_MAX/" \
+  "$PAYLOAD_DIR/systemd/llama-server.service" > /etc/systemd/system/llama-server.service
 cp "$PAYLOAD_DIR/systemd/gardener.service" /etc/systemd/system/
 sed "s/__INTERVAL_MIN__/${INTERVAL_MIN:-15}/" \
   "$PAYLOAD_DIR/systemd/gardener.timer" > /etc/systemd/system/gardener.timer

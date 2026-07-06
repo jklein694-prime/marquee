@@ -4,17 +4,20 @@ After=local-fs.target
 # no network dependency on purpose: the box is air-gapped
 
 [Service]
-# MODEL_FILE, CTX, LLAMA_VARIANT, LLAMA_EXTRA_ARGS, MEMORY_MAX are rendered
-# into runtime.env by install.sh from the detected tier + build outcome
+# MODEL_FILE, CTX, LLAMA_VARIANT, LLAMA_EXTRA_ARGS come from runtime.env,
+# rendered by install.sh from the detected tier + build outcome. Unbraced
+# $LLAMA_EXTRA_ARGS on purpose: systemd word-splits only the unbraced form,
+# and "-ngl 99" must arrive as two arguments. __MEMORY_MAX__ is sed-rendered
+# at install time because MemoryMax= does not expand environment variables.
 EnvironmentFile=/etc/wikigardener/runtime.env
 ExecStart=/opt/wikigardener/bin/llama-server-${LLAMA_VARIANT} \
     -m /opt/wikigardener/models/${MODEL_FILE} \
     --host 127.0.0.1 --port 8080 \
-    -c ${CTX} -t 3 ${LLAMA_EXTRA_ARGS}
+    -c ${CTX} -t 3 $LLAMA_EXTRA_ARGS
 Restart=always
 RestartSec=10
 Nice=10
-MemoryMax=${MEMORY_MAX}
+MemoryMax=__MEMORY_MAX__
 # model load from SD card can take minutes; don't flap during it
 TimeoutStartSec=600
 
