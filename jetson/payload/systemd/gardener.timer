@@ -1,0 +1,13 @@
+[Unit]
+Description=Fire one wiki gardening task on an interval
+
+[Timer]
+OnBootSec=10min
+# INTERVAL_MIN is rendered in by install.sh; measured from the previous
+# run's END, so slow inference automatically stretches the duty cycle
+OnUnitInactiveSec=__INTERVAL_MIN__min
+RandomizedDelaySec=120
+Persistent=true
+
+[Install]
+WantedBy=timers.target

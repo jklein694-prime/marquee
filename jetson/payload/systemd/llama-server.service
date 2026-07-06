@@ -1,0 +1,22 @@
+[Unit]
+Description=Local llama.cpp server (wiki gardener brain)
+After=local-fs.target
+# no network dependency on purpose: the box is air-gapped
+
+[Service]
+# MODEL_FILE, CTX, LLAMA_VARIANT, LLAMA_EXTRA_ARGS, MEMORY_MAX are rendered
+# into runtime.env by install.sh from the detected tier + build outcome
+EnvironmentFile=/etc/wikigardener/runtime.env
+ExecStart=/opt/wikigardener/bin/llama-server-${LLAMA_VARIANT} \
+    -m /opt/wikigardener/models/${MODEL_FILE} \
+    --host 127.0.0.1 --port 8080 \
+    -c ${CTX} -t 3 ${LLAMA_EXTRA_ARGS}
+Restart=always
+RestartSec=10
+Nice=10
+MemoryMax=${MEMORY_MAX}
+# model load from SD card can take minutes; don't flap during it
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target
