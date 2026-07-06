@@ -6,6 +6,7 @@ import type { NextConfig } from "next";
 // hardcoded absolute path), so this works for any clone. See Next docs: turbopack#root.
 const nextConfig: NextConfig = {
   turbopack: { root: __dirname },
+  allowedDevOrigins: ["192.168.4.25"],
 };
 
 export default nextConfig;
