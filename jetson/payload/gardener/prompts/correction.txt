@@ -1,0 +1,13 @@
+Task: apply a correction requested by the auditing reviewer (a stronger model that reviewed this wiki's recent changes).
+
+Reviewer instruction for {file}:
+{instruction}
+
+Express the correction as ONE patch on the file below. If the instruction cannot be done as one small line-level change, do the most useful single step of it. Use no_change only if the instruction is already satisfied.
+
+File {file}:
+---
+{page}
+---
+
+Existing pages: {pages}

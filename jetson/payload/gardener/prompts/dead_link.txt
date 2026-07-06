@@ -1,0 +1,14 @@
+Task: repair a dead wikilink. The link [[{target}]] in {where} points to no existing page.
+
+Choose ONE:
+- create_stub: if [[{target}]] deserves its own page ("target" must be exactly "{target}", "text" is a one-line description based only on context shown).
+- retarget_link: if an existing page (listed below) is clearly what was meant ("anchor" = the exact line containing [[{target}]], "target" = the correct existing page).
+- remove_line: if the line adds nothing without the link ("anchor" = the exact line containing [[{target}]]).
+- no_change: if unsure.
+
+File {file}:
+---
+{page}
+---
+
+Existing pages: {pages}

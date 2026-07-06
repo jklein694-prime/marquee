@@ -78,5 +78,13 @@ class Git(object):
         rev_range = "%s..HEAD" % ref if ref else "HEAD"
         return self._run("log", fmt, rev_range, check=False)
 
+    def subjects_between(self, since, until):
+        """Commit subject lines in a wall-clock window (for the daily log)."""
+        out = self._run(
+            "log", "--pretty=%s", "--since=%s" % since, "--until=%s" % until,
+            check=False,
+        )
+        return [s for s in out.split("\n") if s]
+
     def revert(self, sha):
         self._run("revert", "--no-edit", sha)

@@ -102,6 +102,12 @@ class WorkQueue(object):
         self._prune("done")
         self._prune("failed")
 
+    def release(self, name):
+        """Put an active item back to pending (e.g. LLM server hiccup)."""
+        src = os.path.join(self._dir("active"), name)
+        if os.path.exists(src):
+            os.rename(src, os.path.join(self._dir("pending"), name))
+
     def recover_stale(self):
         """Return crashed cycles' items (old files in active/) to pending."""
         now = time.time()
