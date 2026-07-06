@@ -125,8 +125,16 @@ def write(path, text):
 
 
 def populate_fixture_vault(root):
-    """vault-template + a few pages with a planted dead link and an orphan."""
+    """vault-template + a few pages with a planted dead link and an orphan.
+
+    Gets the marquee-movies profile installed, exactly as install.sh does —
+    the movie rules are profile-driven now.
+    """
     shutil.copytree(VAULT_TEMPLATE, root)
+    shutil.copy(
+        os.path.join(PAYLOAD, "profiles", "marquee-movies.conf"),
+        os.path.join(root, "gardener-vault.conf"),
+    )
     movies = os.path.join(root, "wiki", "movies")
     genres = os.path.join(movies, "genres")
     write(os.path.join(movies, "Heat (1995).md"), HEAT)
@@ -156,6 +164,56 @@ def populate_fixture_vault(root):
 def fixture_vault(tmp_path):
     root = str(tmp_path / "vault")
     return populate_fixture_vault(root)
+
+
+GENERIC_FILES = {
+    # nested folders, cross-folder links, a dead link, an orphan, and a
+    # duplicate basename ("Ideas" in two folders). No hub, no log, no profile.
+    "notes/Compilers.md": (
+        "---\ntitle: Compilers\n---\n\n# Compilers\n\n"
+        "Parsing feeds [[Type Systems]]. See [[Ideas]] and [[Ghost Note]].\n"
+    ),
+    "notes/Type Systems.md": (
+        "---\ntitle: Type Systems\n---\n\n# Type Systems\n\n"
+        "Inference builds on [[Compilers]].\n"
+    ),
+    "notes/projects/Ideas.md": "# Ideas (projects)\n\n- build a wiki gardener\n",
+    "journal/Ideas.md": "# Ideas (journal duplicate)\n",
+    "journal/2026-07-01.md": "# July 1\n\nWrote about [[Compilers]] today.\n",
+    "recipes/Bread.md": "# Bread\n\nNo links in or out. An orphan.\n",
+    "_templates/draft.md": "# template — not a page\n",
+    ".obsidian/plugin.md": "not a page either\n",
+}
+
+
+def populate_generic_vault(root):
+    for rel, text in GENERIC_FILES.items():
+        write(os.path.join(root, rel), text)
+    return root
+
+
+@pytest.fixture
+def generic_vault(tmp_path):
+    root = str(tmp_path / "gvault")
+    return populate_generic_vault(root)
+
+
+@pytest.fixture
+def git_generic_vault(generic_vault):
+    env = dict(
+        os.environ,
+        GIT_AUTHOR_NAME="test",
+        GIT_AUTHOR_EMAIL="t@t",
+        GIT_COMMITTER_NAME="test",
+        GIT_COMMITTER_EMAIL="t@t",
+    )
+    for cmd in (
+        ["git", "init", "-q"],
+        ["git", "add", "-A"],
+        ["git", "commit", "-q", "-m", "seed"],
+    ):
+        subprocess.check_call(cmd, cwd=generic_vault, env=env)
+    return generic_vault
 
 
 @pytest.fixture
