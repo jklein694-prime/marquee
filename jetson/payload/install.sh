@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 # install.sh — one command on the Nano, fully offline:
 #
-#   sudo bash install.sh
+#   sudo bash install.sh [--profile <name|path>]
 #
 # Steps: preflight -> build llama.cpp on-device (CPU mandatory, CUDA
 # best-effort) -> install models/code/config -> seed the vault as a git repo
 # -> systemd services -> self-test. Idempotent: safe to re-run; the vault is
 # never overwritten once it exists.
+#
+# --profile picks the vault profile (a name from profiles/, or a path to a
+# gardener-vault.conf). Default: auto-detect — a seed containing
+# wiki/entities/Movies.md gets the marquee-movies profile, anything else the
+# generic one. A profile already present in the seed always wins.
 set -euo pipefail
 
 PAYLOAD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,6 +19,14 @@ OPT=/opt/wikigardener
 ETC=/etc/wikigardener
 VAR=/var/lib/wikigardener
 BUILD_LOG="$VAR/build.log"
+
+PROFILE_ARG=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --profile) PROFILE_ARG="$2"; shift 2 ;;
+    *) echo "unknown flag: $1" >&2; exit 2 ;;
+  esac
+done
 
 [ "$(id -u)" = 0 ] || { echo "run as root: sudo bash install.sh" >&2; exit 1; }
 
@@ -90,14 +103,38 @@ EOF
 echo "   tier=$TIER variant=$LLAMA_VARIANT"
 
 # --- 3. vault --------------------------------------------------------------------
-if [ ! -d "$VAR/vault/wiki" ]; then
+if [ ! -d "$VAR/vault/.git" ]; then
   echo "== seeding vault from payload snapshot"
   mkdir -p "$VAR/vault"
   rsync -a --exclude .git "$PAYLOAD_DIR/vault-seed/" "$VAR/vault/"
-  mkdir -p "$VAR/vault/.vault-meta"
-  [ -f "$VAR/vault/.vault-meta/address-counter.txt" ] \
-    || echo 0 > "$VAR/vault/.vault-meta/address-counter.txt"
-  mkdir -p "$VAR/vault/wiki/audits"
+
+  # pick the vault profile: explicit flag > profile shipped in the seed >
+  # auto-detect by layout
+  if [ -n "$PROFILE_ARG" ]; then
+    if [ -f "$PROFILE_ARG" ]; then
+      PROFILE_SRC="$PROFILE_ARG"
+    elif [ -f "$PAYLOAD_DIR/profiles/$PROFILE_ARG.conf" ]; then
+      PROFILE_SRC="$PAYLOAD_DIR/profiles/$PROFILE_ARG.conf"
+    else
+      echo "FATAL: unknown profile: $PROFILE_ARG (have: $(cd "$PAYLOAD_DIR/profiles" && printf '%s ' *.conf | sed 's/\.conf//g'))" >&2
+      exit 1
+    fi
+  elif [ -f "$VAR/vault/wiki/entities/Movies.md" ]; then
+    PROFILE_SRC="$PAYLOAD_DIR/profiles/marquee-movies.conf"
+  else
+    PROFILE_SRC="$PAYLOAD_DIR/profiles/generic.conf"
+  fi
+  cp -n "$PROFILE_SRC" "$VAR/vault/gardener-vault.conf"
+  echo "   profile: $(basename "$PROFILE_SRC") -> gardener-vault.conf"
+
+  # the address scheme is a marquee-profile feature; generic vaults never
+  # get a .vault-meta unless their seed brought one
+  if grep -q '^STUB_KIND_' "$VAR/vault/gardener-vault.conf" 2>/dev/null; then
+    mkdir -p "$VAR/vault/.vault-meta"
+    [ -f "$VAR/vault/.vault-meta/address-counter.txt" ] \
+      || echo 0 > "$VAR/vault/.vault-meta/address-counter.txt"
+  fi
+
   ( cd "$VAR/vault"
     git init -q
     git config user.name "wiki-gardener"

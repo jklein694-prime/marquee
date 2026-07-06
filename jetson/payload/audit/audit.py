@@ -68,7 +68,8 @@ def gather_evidence(cfg, vault, git, queue):
         % ("\n".join(failed) or "(none)")
     )
 
-    parts.append("# Hub page\n%s" % vault.read(vault.hub))
+    if vault.hub and os.path.exists(vault.hub):
+        parts.append("# Hub page\n%s" % vault.read(vault.hub))
 
     state = sample.load_state(cfg.state_file)
     sample.seed_state(vault, state)
@@ -173,6 +174,11 @@ def main(argv=None):
     evidence = gather_evidence(cfg, vault, git, queue)
     with open(os.path.join(HERE, "audit-system.txt"), encoding="utf-8") as fh:
         system = fh.read()
+    desc = vault.profile.vault_description
+    system = system.replace(
+        "__VAULT_DESCRIPTION__",
+        " The wiki is %s." % desc.rstrip(".") if desc else "",
+    )
 
     print("== calling %s (%d chars of evidence)" % (MODEL, len(evidence)))
     reply = call_sonnet(args.base_url, api_key, system, evidence)

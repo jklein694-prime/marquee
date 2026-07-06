@@ -151,6 +151,31 @@ def test_parse_corrections_empty_and_garbage(git_vault):
     assert audit.parse_corrections("```json\n[]\n```", v) == []
 
 
+def test_audit_generic_vault_no_hub(git_generic_vault, tmp_path):
+    server = MockAnthropic("## Verdict\nFine.\n\n```json\n[]\n```\n")
+    try:
+        conf = tmp_path / "gardener.conf"
+        conf.write_text(
+            "VAULT_DIR=%s\nQUEUE_DIR=%s\nSTATE_FILE=%s\n"
+            % (git_generic_vault, tmp_path / "queue", tmp_path / "state.json")
+        )
+        key = tmp_path / "anthropic.key"
+        key.write_text("sk-ant-test")
+        rc = audit.main(
+            ["--conf", str(conf), "--key-file", str(key), "--base-url", server.url]
+        )
+        assert rc == 0
+        evidence = server.requests[0]["body"]["messages"][0]["content"]
+        assert "# Hub page" not in evidence  # gated: this vault has no hub
+        assert "__VAULT_DESCRIPTION__" not in server.requests[0]["body"]["system"]
+        # audit notes land in the default _audits dir
+        notes = os.listdir(os.path.join(git_generic_vault, "_audits"))
+        assert len(notes) == 1
+        assert not Git(git_generic_vault).dirty()
+    finally:
+        server.stop()
+
+
 def test_second_audit_diffs_since_last_tag(audit_env):
     audit.main(
         ["--conf", audit_env["conf"], "--key-file", audit_env["key"],

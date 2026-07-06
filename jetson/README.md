@@ -6,8 +6,18 @@ offline: it repairs broken wikilinks, adopts orphan pages, removes stale
 lines, and keeps weaving new connections through random, staleness-weighted
 samples of the graph. Every change is one git commit. Occasionally you
 connect WiFi for a few minutes and run a **Sonnet audit**: Claude reviews
-everything the gardener did, writes a review into `wiki/audits/`, and queues
-corrections the gardener then works through after you disconnect.
+everything the gardener did, writes a review into the audits folder, and
+queues corrections the gardener then works through after you disconnect.
+
+It works on **any Obsidian vault**. With no configuration, every `.md` found
+by a recursive scan is a page (dot-directories, `_underscore` files/dirs,
+audits, and the log are skipped) and the universal rules apply. An optional
+`gardener-vault.conf` in the vault root teaches it your structure — hub page
+and its section rules, page directories, stub locations, frontmatter link
+keys, a domain description injected into the model's prompts. Two profiles
+ship in `payload/profiles/`: `marquee-movies.conf` (this repo's movie wiki)
+and a fully commented `generic.conf`. The installer auto-detects which one
+fits your seed; override with `sudo bash install.sh --profile <name|path>`.
 
 ```
 online machine                    USB                Jetson Nano (offline)
@@ -119,8 +129,9 @@ sudo bash /opt/wikigardener/audit/audit.sh
 ```
 
 Sonnet receives the git history since the last audit, the lint report, the
-failed-patch journal, and sampled pages; it writes `wiki/audits/<date>.md`
-(human review + a JSON corrections block) and its corrections enter the queue
+failed-patch journal, and sampled pages; it writes `<AUDITS_DIR>/<date>.md`
+(`wiki/audits/` on the movie profile, `_audits/` generic — human review + a
+JSON corrections block) and its corrections enter the queue
 at top priority — `revert` corrections are applied mechanically via git, the
 rest are handed to the local model one at a time. The vault gets an
 `audit/<date>` tag, which becomes the baseline for the next audit.
@@ -144,7 +155,7 @@ rest are handed to the local model one at a time. The vault gets an
 ## Development (this repo, no Jetson needed)
 
 ```bash
-python3 -m pytest jetson/tests -q        # 109 tests incl. full mocked cycles
+python3 -m pytest jetson/tests -q        # full suite incl. mocked daemon cycles
 bash jetson/ci/shellcheck.sh             # lint all shell
 bash jetson/ci/payload-smoke.sh          # fake-artifact payload build + verify
 bash jetson/ci/py36-compat-check.sh      # Nano's python3.6 compatibility
