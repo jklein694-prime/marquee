@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck.sh — lint every shell script in the jetson tree.
+# Lint every shell script in the jetson tree.
 # SC1091 (can't follow sourced file) is expected for PINS.env, which sits
 # next to install.sh only after build-payload.sh assembles the payload.
 set -euo pipefail

@@ -113,14 +113,17 @@ def enqueue_corrections(queue, corrections):
     """Validated Sonnet audit corrections -> priority-00 items."""
     added = 0
     for c in corrections:
+        payload = {
+            "target": c["file"],
+            "instruction": c["instruction"],
+            "kind": c.get("kind", "fix"),
+        }
+        if "sha" in c:
+            payload["sha"] = c["sha"]  # mechanical revert needs the commit
         queue.enqueue(
             workqueue.PRIO_AUDIT,
             "correction",
-            {
-                "target": c["file"],
-                "instruction": c["instruction"],
-                "kind": c.get("kind", "fix"),
-            },
+            payload,
             slug=os.path.basename(c["file"]),
         )
         added += 1
