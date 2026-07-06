@@ -24,11 +24,6 @@ class Vault(object):
         self.log = self._abs_or_none(p.log_file)
         self.audits_dir = os.path.join(self.root, p.audits_dir)
         self.duplicates = []  # [(name, winner_rel, loser_rel)] from last pages()
-        # transitional: patch.py still keys on these; removed when the
-        # membership-based editability rule lands
-        self.movies_dir = os.path.join(self.root, "wiki/movies")
-        self.genres_dir = os.path.join(self.root, "wiki/movies/genres")
-        self.entities_dir = os.path.join(self.root, "wiki/entities")
 
     def _abs_or_none(self, rel):
         return os.path.join(self.root, rel) if rel else None

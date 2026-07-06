@@ -93,6 +93,90 @@ def test_generic_lint_universal_rules_only(generic_vault):
     assert autofix_vault(v) == []
 
 
+# -- generic patches -------------------------------------------------------------
+
+
+def _patch(vault_root, data, context=None):
+    from gardener.patch import Patch
+
+    return Patch(data, Vault(vault_root), context=context)
+
+
+def _base(action, **kw):
+    d = {"action": action, "reason": "test"}
+    d.update(kw)
+    return d
+
+
+def test_generic_patch_edits_nested_page(generic_vault):
+    p = _patch(
+        generic_vault,
+        _base(
+            "add_link",
+            file="journal/2026-07-01.md",
+            anchor="Wrote about [[Compilers]] today.",
+            text="Related reading: [[Type Systems]].",
+            target="Type Systems",
+        ),
+    )
+    assert p.apply() == ["journal/2026-07-01.md"]
+
+
+def test_generic_patch_rejects_non_members(generic_vault):
+    import pytest
+
+    from gardener.patch import PatchError
+
+    with open(os.path.join(generic_vault, "gardener-vault.conf"), "w") as fh:
+        fh.write("READONLY_PATHS=recipes\n")
+    for rel, match in (
+        # underscore DIRECTORY: never a member of pages(), so membership fails
+        ("_templates/draft.md", "outside allowed"),
+        ("gardener-vault.conf", "not an editable page"),
+        ("recipes/Bread.md", "outside allowed"),  # read-only via profile
+        ("../outside.md", "escapes"),
+    ):
+        with pytest.raises(PatchError, match=match):
+            _patch(
+                generic_vault,
+                _base("append_bullet", file=rel, text="- x"),
+            )
+
+
+def test_generic_auto_stub_lands_beside_source(generic_vault):
+    p = _patch(
+        generic_vault,
+        _base("create_stub", target="Ghost Note", text="Placeholder for a ghost."),
+        context={
+            "target": "Ghost Note",
+            "stub_dir": "auto",
+            "source": "notes/Compilers.md",
+        },
+    )
+    changed = p.apply(today="2026-07-06")
+    assert changed == [os.path.join("notes", "Ghost Note.md")]
+    text = Vault(generic_vault).read(
+        os.path.join(generic_vault, "notes", "Ghost Note.md")
+    )
+    assert "address:" not in text  # minimal template, no address scheme
+    assert "status: stub" in text
+    # and no .vault-meta ever appears in a vault that never opted in
+    assert not os.path.exists(os.path.join(generic_vault, ".vault-meta"))
+
+
+def test_generic_auto_stub_requires_source(generic_vault):
+    import pytest
+
+    from gardener.patch import PatchError
+
+    with pytest.raises(PatchError, match="source page"):
+        _patch(
+            generic_vault,
+            _base("create_stub", target="Ghost Note", text="x"),
+            context={"stub_dir": "auto"},
+        )
+
+
 def test_generic_hub_rules_activate_via_profile(generic_vault):
     """Hub gating is profile-driven, not marquee-specific."""
     from gardener.lint import lint_vault

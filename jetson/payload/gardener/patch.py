@@ -14,17 +14,19 @@ Schema (exactly one object):
   }
 
 Guarantees enforced here, independent of anything the model says:
-  - paths realpath-confined to the vault, and only under wiki/movies,
-    wiki/movies/genres, wiki/entities
-  - wiki/audits/**, wiki/log.md and underscore files are read-only to patches
-  - the hub accepts only link-level actions (add_link/retarget_link and
-    remove_line of the dead link under repair)
+  - paths realpath-confined to the vault, and editable ONLY by membership:
+    the file must be one of vault.pages() (or the hub) — audits, the log,
+    underscore/dot files, READONLY_PATHS, and the profile file are never
+    members, and a stray .md outside the page set is equally untouchable
+  - the hub (when the profile declares one) accepts only link-level actions
+    (add_link/retarget_link and remove_line of the dead link under repair)
   - anchors must occur exactly once, in the body, and never be a heading;
     remove_line additionally only removes bullets or the dead link's line
   - every [[wikilink]] written must resolve to an existing page (or the stub
     being created)
-  - stubs are rendered from a fixed template — the model contributes one
-    description line, never raw frontmatter
+  - stubs are rendered from fixed templates — the model contributes one
+    description line, never raw frontmatter; stub locations come from the
+    profile's stub kinds, or (generic vaults) the dead link's own page dir
   - there is no page-deletion action at all
 """
 import json
@@ -33,6 +35,7 @@ import re
 import time
 
 from . import allocate, frontmatter
+from .profile import PROFILE_BASENAME
 from .wikilink import wikilinks
 
 ACTIONS = (
@@ -68,6 +71,20 @@ created: {today}
 updated: {today}
 tags:
   - {tag}
+status: stub
+---
+
+# {title}
+
+{description}
+"""
+
+# generic vaults get minimal frontmatter and NO address — .vault-meta/ stays
+# out of vaults that never opted into the address scheme
+GENERIC_STUB_TEMPLATE = """---
+title: "{title}"
+created: {today}
+updated: {today}
 status: stub
 ---
 
@@ -202,7 +219,10 @@ class Patch(object):
             if "target" in REQUIRED[action]
             else ""
         )
-        if self.target and re.search(r"[/\\\[\]|#]", self.target):
+        if self.target and (
+            re.search(r"[/\\\[\]|#]", self.target)
+            or self.target.startswith((".", "_"))
+        ):
             raise PatchError("target must be a bare page name")
 
         if action == "no_change":
@@ -221,20 +241,19 @@ class Patch(object):
         abspath = self.vault.resolve(rel)
         if not abspath:
             raise PatchError("file escapes the vault: %r" % rel)
-        allowed = (
-            self.vault.movies_dir,
-            self.vault.genres_dir,
-            self.vault.entities_dir,
-        )
-        parent = os.path.dirname(abspath)
-        if parent not in allowed:
-            raise PatchError("file outside allowed directories: %r" % rel)
         base = os.path.basename(abspath)
-        if base.startswith("_") or not base.endswith(".md"):
+        if base.startswith("_") or not base.endswith(".md") or base == PROFILE_BASENAME:
             raise PatchError("file is not an editable page: %r" % rel)
         if not os.path.isfile(abspath):
             raise PatchError("file does not exist: %r" % rel)
-        if abspath == os.path.realpath(self.vault.hub):
+        # membership is the editability rule: pages() already excludes the
+        # audits dir, log, read-only paths, dot/underscore trees — and a
+        # stray .md outside the page set is equally untouchable
+        hub_real = os.path.realpath(self.vault.hub) if self.vault.hub else None
+        members = {os.path.realpath(p) for p in self.vault.pages().values()}
+        if abspath != hub_real and abspath not in members:
+            raise PatchError("file outside allowed directories: %r" % rel)
+        if abspath == hub_real:
             if self.action not in ("add_link", "retarget_link", "remove_line"):
                 raise PatchError("hub accepts only link-level actions")
             if self.action == "remove_line":
@@ -278,17 +297,27 @@ class Patch(object):
                 raise PatchError("anchor does not contain [[%s]]" % old)
 
     def _validate_create_stub(self):
-        stub_dir = self.context.get("stub_dir", "movies")
-        if stub_dir not in ("movies", "genres"):
+        kinds = self.vault.profile.stub_kinds
+        stub_dir = self.context.get("stub_dir") or ("auto" if not kinds else "")
+        self.stub_kind = None
+        if stub_dir in kinds:
+            self.stub_kind = kinds[stub_dir]
+            directory = os.path.join(self.vault.root, self.stub_kind.directory)
+        elif stub_dir == "auto":
+            # generic vault: the stub lands beside the page that links to it
+            source = self.vault.resolve(self.context.get("source", ""))
+            if not source or not os.path.isfile(source):
+                raise PatchError("auto stub needs a source page in task context")
+            directory = os.path.dirname(source)
+        else:
             raise PatchError("invalid stub_dir in task context")
-        directory = (
-            self.vault.genres_dir if stub_dir == "genres" else self.vault.movies_dir
-        )
         expected = self.context.get("target", "")
         if expected and self.target != expected:
             raise PatchError(
                 "stub must be named after the dead link [[%s]]" % expected
             )
+        if self.target in self.vault.pages():
+            raise PatchError("stub already exists: %s" % self.target)
         self.path = os.path.join(directory, "%s.md" % self.target)
         if os.path.exists(self.path):
             raise PatchError("stub already exists: %s" % self.target)
@@ -334,28 +363,36 @@ class Patch(object):
         return [self.vault.relpath(self.path)]
 
     def _apply_create_stub(self, today):
-        address = allocate.allocate(self.vault.root)
-        is_genre = self.stub_dir == "genres"
-        content = STUB_TEMPLATE.format(
-            title=self.target,
-            entity_type="category" if is_genre else "movie",
-            address=address,
-            today=today,
-            tag="category" if is_genre else "movie",
-            description=self.text,
-        )
+        if self.stub_kind:
+            content = STUB_TEMPLATE.format(
+                title=self.target,
+                entity_type=self.stub_kind.entity_type,
+                address=allocate.allocate(self.vault.root),
+                today=today,
+                tag=self.stub_kind.tag,
+                description=self.text,
+            )
+        else:
+            content = GENERIC_STUB_TEMPLATE.format(
+                title=self.target, today=today, description=self.text
+            )
         with open(self.path, "w", encoding="utf-8") as fh:
             fh.write(content)
         changed = [self.vault.relpath(self.path)]
-        if is_genre:
+        profile = self.vault.profile
+        if (
+            profile.index_file
+            and profile.indexed_stub_kind
+            and self.stub_dir == profile.indexed_stub_kind
+        ):
             changed.extend(self._index_category())
         return changed
 
     def _index_category(self):
-        """Mechanical side-effect: new category pages get listed in _index.md
-        (never done by the model)."""
-        index = os.path.join(self.vault.movies_dir, "_index.md")
-        if not os.path.isfile(index):
+        """Mechanical side-effect: new stubs of the profile's indexed kind
+        get listed in INDEX_FILE (never done by the model)."""
+        index = self.vault.resolve(self.vault.profile.index_file)
+        if not index or not os.path.isfile(index):
             return []
         text = self.vault.read(index)
         entry = "- [[%s]]" % self.target
