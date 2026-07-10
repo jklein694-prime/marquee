@@ -4,8 +4,10 @@ import {
   writeUserList,
   hubSuggestions,
   enrich,
+  enrichCached,
   refreshStale,
   snoozeTitle,
+  notInterestedItems,
   WatchItem,
 } from "@/lib/watchlist";
 
@@ -21,9 +23,9 @@ export async function GET() {
   const suggestions = await Promise.all(
     hubSuggestions()
       .filter((s) => !have.has(s.title.toLowerCase()))
-      .map(enrich)
+      .map(enrichCached)
   );
-  return NextResponse.json({ user, suggestions });
+  return NextResponse.json({ user, suggestions, notInterested: notInterestedItems() });
 }
 
 export async function POST(request: NextRequest) {
@@ -41,6 +43,7 @@ export async function POST(request: NextRequest) {
         year: body.year,
         media: body.media ?? "movie",
         note: body.note,
+        predicted: body.predicted,
       });
       items.push(item);
       writeUserList(items);

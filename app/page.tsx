@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import ChatPane, { ChatSend, TraceEntry } from "@/components/ChatPane";
 import GraphView from "@/components/GraphView";
 import Watchlist from "@/components/Watchlist";
+import HelpPanel from "@/components/HelpPanel";
 
 const KIND_STYLE: Record<TraceEntry["kind"], string> = {
   init: "text-muted",
@@ -133,7 +134,7 @@ export default function Home() {
             ) : panel === "watchlist" ? (
               <Watchlist
                 version={graphVersion}
-                onChat={(t, onDone) => chatSend.current(t, onDone)}
+                onChat={(t, onDone, opts) => chatSend.current(t, onDone, opts)}
               />
             ) : (
               <Booth entries={trace} />

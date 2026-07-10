@@ -40,14 +40,62 @@ The wiki folder (`VAULT_PATH` in `.env.local`) is the whole brain:
 
 ```
 <your-wiki>/
-  wiki/entities/Movies.md           # the hub: taste profile, watchlist, Seen ledger
-  wiki/movies/<Title (Year)>.md     # one page per movie/show you've seen
-  wiki/movies/genres/<Category>.md  # genres, styles, eras, directors-as-category
+  wiki/entities/Movies.md                  # the hub: taste digest, watchlist, Seen ledger
+  wiki/movies/_index.md                    # GRAND INDEX: routing table, one row per dimension
+  wiki/movies/<Title (Year)>.md            # one page per movie/show you've seen
+  wiki/movies/<dimension>/_index.md        # sub-index: one line per category in that dimension
+  wiki/movies/<dimension>/<Category>.md    # category pages, one directory per taste dimension
+  wiki/movies/taste/Taste Profile.md       # the deep, evidence-cited taste profile
 ```
 
-Movie pages wikilink to category pages and back; the hub links to both. The app parses those
-links into the force-directed taste graph you see on screen. The `movie-expert` skill
-(vendored in `.claude/skills/`) writes to the same files as you chat.
+The seven dimensions are `genres/`, `people/`, `themes/`, `style/`, `platforms/`, `eras/`,
+and `settings/`. Movie pages wikilink to category pages and back; the hub links to both. The
+app parses those links into the force-directed taste graph you see on screen. The
+`movie-expert` skill (vendored in `.claude/skills/`) writes to the same files as you chat.
+
+### The wiki's index architecture (and why)
+
+The wiki is read and written by an LLM, so its layout follows what works for LLM memory
+systems (MemGPT/Letta's core-vs-archival memory, Karpathy's LLM-wiki pattern, Anthropic's
+progressive-disclosure skills, Wikipedia's category rules) rather than what looks tidy to a
+human. It is a **three-tier tree with exactly two index levels**:
+
+1. **Grand index** (`wiki/movies/_index.md`, always read, kept under ~1K tokens) — a routing
+   table. One row per dimension: page count, scope, and the hottest signal ("Apple TV+ >
+   HBO > Netflix; CBS negative"). Its only job is answering *"which sub-index should I
+   open?"* It follows Wikipedia's **container rule**: it lists sub-indexes only, never
+   individual pages — so logging a movie never touches it, and it stays stable enough to
+   stay cheap in the model's prompt cache.
+2. **Dimension sub-indexes** (`<dimension>/_index.md`, read on demand) — one bullet per
+   category page (`[[Page]] — pattern line`), mirroring the directory exactly. Because index
+   = directory, freshness is *mechanically checkable*: the app's lint pass flags any
+   index↔file mismatch, a page indexed in two dimensions, or a sub-index growing past its
+   split point. Each category lives in exactly one sub-index (Wikipedia's most-specific
+   rule); cross-dimension relationships are wikilinks inside page bodies.
+3. **Leaf pages** — movie pages, category pages (each carrying its own evidence and a
+   `**Pattern:**` line), and the deep `Taste Profile.md`.
+
+**Why not one big index?** The old layout was a single flat `_index.md` (100+ entries) plus a
+~69 KB hub read every turn. Flat LLM-wiki indexes degrade at roughly 100 entries — the model
+skims, mis-ranks, and duplicates entries (ours had the same category indexed twice with
+contradictory patterns) — and every page-add rewrites the one hot file. Worse, the giant
+always-read hub is the "read everything every query" antipattern: ~17K tokens prefetched per
+turn, mostly irrelevant, and edited so often it busts prompt caching.
+
+**Why hierarchy doesn't add latency.** The unit of agent latency is a model round trip, not
+file I/O — *depth* costs round trips, *width* is nearly free. So the tree is capped at two
+index levels with wide fan-out, and the expert reads hub + grand index + the 1-3 relevant
+sub-indexes in a single batched tool message (~one round trip). Worst case a turn needs one
+extra parallel read; in exchange every turn stops prefilling ~15K tokens of taste essays,
+and the always-read layer is small and stable enough to cache. Net effect: faster and
+cheaper per turn, with more reliable triage.
+
+**Two write cadences keep it honest.** Inline (every turn): new category page → one bullet
+in its dimension's sub-index; done. Consolidation (every ~5 logged titles, with pattern
+mining): refresh sub-index pattern lines from their pages, refresh grand-index counts and
+signals, rewrite the hub's ~15-bullet taste digest, and date-stamp superseded claims in
+`Taste Profile.md` (claims are never silently deleted — taste drift is data). Cheap
+incremental updates drift; the periodic rebuild is what keeps the indexes trustworthy.
 
 ## Connect Claude Desktop
 

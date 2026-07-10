@@ -14,6 +14,8 @@ export interface WatchItem {
   trailer?: string;
   genres?: string[];
   note?: string;
+  overview?: string;
+  predicted?: string; // Louie's projected score from the hub bullet, e.g. "8-9" or "9"
   verifiedAt?: number;
 }
 
@@ -35,6 +37,45 @@ function readSnoozes(): Record<string, number> {
   } catch {
     return {};
   }
+}
+
+// lowercased titles currently snoozed — the chat pipeline uses this to keep
+// "not now" picks out of recommendations, not just out of the watchlist tab
+export function activeSnoozes(): string[] {
+  return Object.keys(readSnoozes());
+}
+
+export interface VetoItem {
+  title: string;
+  note?: string;
+}
+
+// the hub's "## Not interested" section: permanent per-title vetoes ("spoiled
+// for me", "never suggest this") — unlike snoozes these never lapse
+export function notInterestedItems(): VetoItem[] {
+  if (!fs.existsSync(HUB)) return [];
+  const { content } = matter(fs.readFileSync(HUB, "utf8"));
+  const section = content
+    .split(/^## /m)
+    .find((s) => s.split("\n", 1)[0].toLowerCase().startsWith("not interested"));
+  if (!section) return [];
+  const items: VetoItem[] = [];
+  for (const line of section.split("\n")) {
+    if (!/^\s*-\s+\S/.test(line) || line.includes("(empty")) continue;
+    const bullet = line.replace(/^\s*-\s+/, "").trim();
+    const title = wikilinks(bullet)[0] ?? bullet.split(" — ")[0].trim();
+    if (!title) continue;
+    const clean = bullet.replace(WIKILINK, "$1");
+    const note = clean.startsWith(title)
+      ? clean.slice(title.length).replace(/^\s*[—–-]\s*/, "")
+      : clean;
+    items.push({ title, note });
+  }
+  return items;
+}
+
+export function notInterested(): string[] {
+  return notInterestedItems().map((i) => i.title);
 }
 
 export function snoozeTitle(title: string) {
@@ -64,7 +105,16 @@ export function hubSuggestions(): WatchItem[] {
   if (!section) return [];
   const snoozed = readSnoozes();
   const items: WatchItem[] = [];
+  // bold "**Tier N — predicted 8-9**" headers set a running prediction that each
+  // following bullet inherits; an inline "predicted X" in a bullet overrides it
+  const PRED = /predicted\s+(\d+(?:-\d+)?)/i;
+  let tierPredicted: string | undefined;
   for (const line of section.split("\n")) {
+    const header = line.match(/^\s*\*\*.*?\*\*\s*$/) ? line.match(PRED) : null;
+    if (header) {
+      tierPredicted = header[1];
+      continue;
+    }
     if (!/^\s*-\s+\S/.test(line) || line.includes("(empty")) continue;
     const bullet = line.replace(/^\s*-\s+/, "").trim();
     const title = wikilinks(bullet)[0] ?? bullet.split(" — ")[0].trim();
@@ -73,7 +123,8 @@ export function hubSuggestions(): WatchItem[] {
     const note = clean.startsWith(title)
       ? clean.slice(title.length).replace(/^\s*[—–-]\s*/, "")
       : clean;
-    items.push({ title, media: "movie", note });
+    const predicted = bullet.match(PRED)?.[1] ?? tierPredicted;
+    items.push({ title, media: "movie", note, predicted });
   }
   return items;
 }
@@ -109,6 +160,7 @@ async function resolve(name: string, year?: number): Promise<Partial<WatchItem> 
     streaming: d.streaming,
     trailer: d.trailer,
     genres: d.genres,
+    overview: d.overview,
   };
 }
 
@@ -124,6 +176,7 @@ export async function enrich(item: WatchItem): Promise<WatchItem> {
         streaming: d.streaming,
         trailer: d.trailer,
         genres: d.genres,
+        overview: d.overview,
         verifiedAt: Date.now(),
       };
     }
@@ -137,6 +190,21 @@ export async function enrich(item: WatchItem): Promise<WatchItem> {
   } catch {
     return item; // TMDB down — render bare, try again next load (no verifiedAt stamp)
   }
+}
+
+// ponytail: per-process memo — hub suggestions are re-parsed from markdown on
+// every GET with no stored verifiedAt, so enrich() fired one TMDB call per
+// suggestion per request. A restart just re-warms the cache.
+const suggestionCache = new Map<string, { item: WatchItem; at: number }>();
+
+export async function enrichCached(item: WatchItem): Promise<WatchItem> {
+  const key = item.title.toLowerCase();
+  const hit = suggestionCache.get(key);
+  if (hit && Date.now() - hit.at < VERIFY_TTL_MS)
+    return { ...hit.item, note: item.note, predicted: item.predicted }; // note + predicted come fresh from the hub
+  const out = await enrich(item);
+  if (out.verifiedAt) suggestionCache.set(key, { item: out, at: Date.now() });
+  return out;
 }
 
 // re-enriches anything never verified or older than the TTL; returns the

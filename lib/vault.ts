@@ -7,7 +7,13 @@ import { WIKILINK, wikilinks } from "./wikilink";
 // Falls back to a ./vault folder in the project so the app still boots with an empty graph.
 export const VAULT = process.env.VAULT_PATH || path.join(process.cwd(), "vault");
 export const MOVIES_DIR = path.join(VAULT, "wiki/movies");
-export const GENRES_DIR = path.join(MOVIES_DIR, "genres");
+// category pages live in one subdirectory per taste dimension, each with its
+// own _index.md; wiki/movies/_index.md is the grand index routing to them
+export const DIMENSIONS = [
+  "genres", "people", "themes", "style", "platforms", "eras", "settings",
+] as const;
+export const CATEGORY_DIRS = DIMENSIONS.map((d) => path.join(MOVIES_DIR, d));
+export const TASTE_DIR = path.join(MOVIES_DIR, "taste"); // deep taste profile, not category pages
 export const HUB = path.join(VAULT, "wiki/entities/Movies.md");
 
 export type NodeKind = "movie" | "genre" | "watchlist" | "taste";
@@ -37,7 +43,7 @@ export function readWikiPage(
   id: string
 ): { title: string; content: string } | null {
   const name = path.basename(id); // no traversal via the query param
-  for (const dir of [MOVIES_DIR, GENRES_DIR]) {
+  for (const dir of [MOVIES_DIR, ...CATEGORY_DIRS, TASTE_DIR]) {
     const file = path.join(dir, `${name}.md`);
     if (!fs.existsSync(file)) continue;
     const { data, content } = matter(fs.readFileSync(file, "utf8"));
@@ -53,8 +59,9 @@ export function buildGraph(): { nodes: GraphNode[]; links: GraphLink[] } {
   const nodes = new Map<string, GraphNode>();
   const linkKeys = new Set<string>();
   const links: GraphLink[] = [];
+  const categoryFiles = CATEGORY_DIRS.flatMap(mdFiles);
   const genreNames = new Set(
-    mdFiles(GENRES_DIR).map((f) => path.basename(f, ".md"))
+    categoryFiles.map((f) => path.basename(f, ".md"))
   );
 
   const addNode = (n: GraphNode) => {
@@ -80,8 +87,8 @@ export function buildGraph(): { nodes: GraphNode[]; links: GraphLink[] } {
       });
   };
 
-  // genre pages
-  for (const file of mdFiles(GENRES_DIR)) {
+  // category pages (all dimensions)
+  for (const file of categoryFiles) {
     const name = path.basename(file, ".md");
     addNode({ id: name, label: name, kind: "genre" });
   }
@@ -111,8 +118,8 @@ export function buildGraph(): { nodes: GraphNode[]; links: GraphLink[] } {
     }
   }
 
-  // genre page bodies (links back to movies; dedupe handles both directions)
-  for (const file of mdFiles(GENRES_DIR)) {
+  // category page bodies (links back to movies; dedupe handles both directions)
+  for (const file of categoryFiles) {
     const name = path.basename(file, ".md");
     const { content } = matter(fs.readFileSync(file, "utf8"));
     for (const target of wikilinks(content)) {
@@ -127,10 +134,14 @@ export function buildGraph(): { nodes: GraphNode[]; links: GraphLink[] } {
     const sections = content.split(/^## /m);
     for (const section of sections) {
       const heading = section.split("\n", 1)[0].toLowerCase();
+      // top-level bullets only — indented sub-bullets (e.g. rating-tier
+      // breakdowns nested under a parent bullet) are details of their parent,
+      // not standalone taste/watchlist entries, and would otherwise become
+      // garbled synthetic nodes (label = their own truncated text)
       const bullets = section
         .split("\n")
-        .filter((l) => /^\s*-\s+\S/.test(l) && !l.includes("(empty"))
-        .map((l) => l.replace(/^\s*-\s+/, "").trim());
+        .filter((l) => /^-\s+\S/.test(l) && !l.includes("(empty"))
+        .map((l) => l.replace(/^-\s+/, "").trim());
       if (heading.startsWith("taste")) {
         for (const b of bullets) {
           // display without [[ ]] syntax or inline markdown (**bold** etc. would

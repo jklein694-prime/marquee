@@ -52,8 +52,16 @@ type Msg =
   | { role: "widget"; widget: "checklist"; data: ChecklistData; answered: boolean }
   | { role: "widget"; widget: "recs"; data: RecsData };
 
-// onDone fires after the message's turn actually completes (queued or not)
-export type ChatSend = (text: string, onDone?: () => void) => "sent" | "queued" | false;
+// onDone fires after the message's turn actually completes (queued or not).
+// silent: the turn runs on a SEPARATE background session — nothing in the
+// transcript, no busy state, fully concurrent with the chat (booth traces
+// still show it). tag picks which prompt carve-out handles it — see
+// lib/prompt.ts's "Silent app-triggered turns".
+export type ChatSend = (
+  text: string,
+  onDone?: () => void,
+  opts?: { silent?: boolean; tag?: string }
+) => "sent" | "queued" | false;
 
 export interface TraceEntry {
   kind: "init" | "tool" | "error" | "result";
@@ -192,6 +200,16 @@ export default function ChatPane({
   // messages that arrived mid-turn — nothing sent while busy is ever dropped
   const busyRef = useRef(false);
   const queueRef = useRef<{ text: string; onDone?: () => void }[]>([]);
+  const abortRef = useRef<AbortController | null>(null);
+  // background lane: silent turns (watchlist logging, veto edits) run on their
+  // OWN session with their own queue, fully concurrent with the chat lane —
+  // logging never locks the chat and the chat never delays a log. Cross-lane
+  // vault-write races are fenced server-side: the Edit tool rejects stale
+  // writes (file modified since read), the prompt mandates re-read-and-retry,
+  // and the lint loop repairs any missed cross-reference.
+  const logSessionRef = useRef<string | undefined>(undefined);
+  const logBusyRef = useRef(false);
+  const logQueueRef = useRef<{ text: string; onDone?: () => void; tag?: string }[]>([]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
@@ -203,8 +221,16 @@ export default function ChatPane({
     return () => clearInterval(id);
   }, [busy]);
 
-  const send: ChatSend = (text, onDone) => {
+  const send: ChatSend = (text, onDone, opts) => {
     if (!text.trim()) return false;
+    if (opts?.silent) {
+      if (logBusyRef.current) {
+        logQueueRef.current.push({ text, onDone, tag: opts.tag });
+        return "queued";
+      }
+      void run(text, onDone, true, opts.tag);
+      return "sent";
+    }
     if (busyRef.current) {
       queueRef.current.push({ text, onDone });
       return "queued";
@@ -214,26 +240,40 @@ export default function ChatPane({
   };
   if (sendRef) sendRef.current = send;
 
-  async function run(text: string, onDone?: () => void) {
-    busyRef.current = true;
-    setBusy(true);
-    setActivity("thinking…");
-    setMessages((m) => [
-      // any pending option widgets are now answered
-      ...m.map((msg) =>
-        msg.role === "widget" && (msg.widget === "options" || msg.widget === "checklist")
-          ? { ...msg, answered: true }
-          : msg
-      ),
-      { role: "user", text },
-      { role: "assistant", text: "" },
-    ]);
+  async function run(text: string, onDone?: () => void, silent?: boolean, tag = "watchlist-log") {
+    if (silent) {
+      logBusyRef.current = true;
+    } else {
+      busyRef.current = true;
+      setBusy(true);
+      setActivity("thinking…");
+      setMessages((m) => [
+        // any pending option widgets are now answered (silent turns don't
+        // answer them — they stay clickable)
+        ...m.map((msg) =>
+          msg.role === "widget" && (msg.widget === "options" || msg.widget === "checklist")
+            ? { ...msg, answered: true }
+            : msg
+        ),
+        { role: "user", text },
+        { role: "assistant", text: "" },
+      ]);
+    }
 
+    // Stop button aborts the chat lane only — background logs always finish
+    const controller = silent ? null : new AbortController();
+    if (controller) abortRef.current = controller;
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, sessionId: sessionRef.current }),
+        body: JSON.stringify({
+          // tagged here (single place) so the prompt's silent-turn carve-outs
+          // and the flag can't drift apart
+          message: silent ? `<${tag}>\n${text}\n</${tag}>` : text,
+          sessionId: silent ? logSessionRef.current : sessionRef.current,
+        }),
+        signal: controller?.signal,
       });
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
@@ -247,7 +287,18 @@ export default function ChatPane({
         for (const raw of events) {
           if (!raw.startsWith("data: ")) continue;
           const ev = JSON.parse(raw.slice(6));
-          if (ev.type === "text") {
+          if (ev.type === "text" && silent) {
+            // silent turns render nothing in the transcript
+          } else if (ev.type === "widget" && silent) {
+            // prompt forbids widgets in silent turns; if one slips through,
+            // dropping it is safest — the next message resumes the session
+          } else if (ev.type === "status") {
+            // live generation status (thinking…, preparing Edit…) — fills the
+            // long silent stretches between trace lines. Chat lane only: the
+            // busy strip belongs to the chat; background logs stay invisible.
+            if (!silent)
+              setActivity(ev.label ? `${ev.label}${ev.detail ? ` ${ev.detail}` : ""}` : "working…");
+          } else if (ev.type === "text") {
             setMessages((m) => {
               const next = [...m];
               // append to the last assistant bubble, or open a new one after a widget
@@ -279,24 +330,52 @@ export default function ChatPane({
             });
           } else if (ev.type === "trace") {
             onTrace({ ...ev, at: new Date().toLocaleTimeString() });
-            const label = activityLabel(ev);
-            if (label) setActivity(label);
+            if (!silent) {
+              const label = activityLabel(ev);
+              if (label) setActivity(label);
+            }
           } else if (ev.type === "done") {
-            sessionRef.current = ev.sessionId ?? sessionRef.current;
+            if (silent) logSessionRef.current = ev.sessionId ?? logSessionRef.current;
+            else sessionRef.current = ev.sessionId ?? sessionRef.current;
           }
         }
+      }
+    } catch (err) {
+      if (silent) {
+        // no UI surface for a background failure — the turn-end refetch
+        // reconciles state and the item simply stays put for a retry
+        console.error("background turn failed:", err);
+      } else if (err instanceof DOMException && err.name === "AbortError") {
+        setMessages((m) => {
+          const next = [...m];
+          const last = next[next.length - 1];
+          if (last?.role === "assistant") next[next.length - 1] = { role: "assistant", text: last.text + "\n\n_(stopped)_" };
+          return next;
+        });
+      } else {
+        throw err;
       }
     } finally {
       onDone?.();
       onTurnEnd();
-      // drop empty assistant bubbles (e.g. turn ended on a widget)
-      setMessages((m) => m.filter((msg) => !(msg.role === "assistant" && !msg.text.trim())));
-      const next = queueRef.current.shift();
-      if (next) {
-        void run(next.text, next.onDone); // drain — busy stays up across the queue
+      if (silent) {
+        const next = logQueueRef.current.shift();
+        if (next) {
+          void run(next.text, next.onDone, true, next.tag);
+        } else {
+          logBusyRef.current = false;
+        }
       } else {
-        busyRef.current = false;
-        setBusy(false);
+        abortRef.current = null;
+        // drop empty assistant bubbles (e.g. turn ended on a widget)
+        setMessages((m) => m.filter((msg) => !(msg.role === "assistant" && !msg.text.trim())));
+        const next = queueRef.current.shift();
+        if (next) {
+          void run(next.text, next.onDone); // drain — busy stays up across the queue
+        } else {
+          busyRef.current = false;
+          setBusy(false);
+        }
       }
     }
   }
@@ -333,7 +412,7 @@ export default function ChatPane({
             ) : msg.widget === "checklist" ? (
               <MovieChecklist key={i} data={msg.data} answered={msg.answered} locked={busy} onSubmit={send} />
             ) : (
-              <MovieCards key={i} data={msg.data} locked={busy} onAction={send} />
+              <MovieCards key={i} data={msg.data} />
             );
           if (msg.role === "user")
             return (
@@ -356,6 +435,12 @@ export default function ChatPane({
             <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-glow" />
           </span>
           <span className="text-xs text-glow/90">{activity}</span>
+          <button
+            onClick={() => abortRef.current?.abort()}
+            className="cursor-pointer rounded border border-card-border px-2 py-0.5 text-[11px] text-muted hover:border-glow/60 hover:text-glow"
+          >
+            Stop
+          </button>
           <span className="ml-auto min-w-0 truncate pl-3 text-[11px] text-muted">
             tip: {TIPS[tipIdx]}
           </span>
@@ -373,13 +458,12 @@ export default function ChatPane({
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          disabled={busy}
-          placeholder={busy ? "the expert is working…" : "Talk movies & shows…"}
+          placeholder={busy ? "the expert is working — messages queue up…" : "Talk movies & shows…"}
           className="flex-1 rounded-md border border-[#3a2f22] bg-[#1c1713] px-3 py-2 text-sm outline-none placeholder:text-muted focus:border-glow/60 disabled:opacity-60"
         />
         <button
           type="submit"
-          disabled={busy || !input.trim()}
+          disabled={!input.trim()}
           className="rounded-md border border-glow/60 px-4 py-2 text-sm text-glow hover:bg-glow/10 disabled:opacity-40"
         >
           Send

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import type { WatchItem } from "@/lib/watchlist";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { WatchItem, VetoItem } from "@/lib/watchlist";
+import { canonicalService, canonicalServices } from "@/lib/services";
 import type { ChatSend } from "./ChatPane";
 
 const EXCLUDED_KEY = "marquee-excluded-services";
@@ -72,6 +73,123 @@ function ReviewForm({
   );
 }
 
+interface MenuItem {
+  label: string;
+  tone?: "danger";
+  /** fires immediately with no reason step, e.g. a temporary/reversible action */
+  instant?: boolean;
+  onConfirm: (reason: string) => void;
+}
+
+// compact overflow menu for secondary actions. Items with a reason step open
+// a small form instead of firing immediately; closes on outside click, Escape,
+// or after a confirm/instant action.
+function MoreMenu({ items }: { items: MenuItem[] }) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState<MenuItem | null>(null);
+  const [reason, setReason] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  const close = () => {
+    setOpen(false);
+    setActive(null);
+    setReason("");
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("mousedown", onOutside);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onOutside);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  function pick(item: MenuItem) {
+    if (item.instant) {
+      item.onConfirm("");
+      close();
+      return;
+    }
+    setActive(item);
+    setReason("");
+  }
+
+  return (
+    <div ref={ref} className="relative inline-block shrink-0">
+      <button
+        onClick={() => (open ? close() : setOpen(true))}
+        title="More actions"
+        className="flex h-6 w-6 items-center justify-center rounded-md border border-card-border text-muted hover:border-glow/60 hover:text-glow"
+      >
+        ⋮
+      </button>
+      {open && (
+        <div className="absolute right-0 top-7 z-20 w-56 overflow-hidden rounded-md border border-card-border bg-card shadow-lg">
+          {!active ? (
+            items.map((it) => (
+              <button
+                key={it.label}
+                onClick={() => pick(it)}
+                className={`block w-full px-3 py-1.5 text-left text-[11px] ${
+                  it.tone === "danger" ? "text-ember hover:bg-ember/10" : "text-muted hover:bg-glow/10 hover:text-glow"
+                }`}
+              >
+                {it.label}
+              </button>
+            ))
+          ) : (
+            <div className="p-2.5">
+              <div className="mb-1.5 text-[11px] font-medium text-foreground">
+                {active.label} — reason (optional)
+              </div>
+              <textarea
+                autoFocus
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="e.g. too slow-paced for me"
+                rows={2}
+                className="w-full resize-none rounded-md border border-card-border bg-background px-2 py-1.5 text-xs outline-none focus:border-glow/60"
+              />
+              <div className="mt-1.5 flex gap-1.5">
+                <button
+                  onClick={() => {
+                    active.onConfirm(reason.trim());
+                    close();
+                  }}
+                  className={`rounded-md border px-2 py-1 text-[11px] ${
+                    active.tone === "danger"
+                      ? "border-ember/60 text-ember hover:bg-ember/10"
+                      : "border-glow/60 text-glow hover:bg-glow/10"
+                  }`}
+                >
+                  Confirm
+                </button>
+                <button
+                  onClick={() => {
+                    setActive(null);
+                    setReason("");
+                  }}
+                  className="rounded-md px-2 py-1 text-[11px] text-muted hover:text-foreground"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Card({
   item,
   controls,
@@ -91,6 +209,7 @@ function Card({
   onReviewCancel: () => void;
   dragProps?: React.HTMLAttributes<HTMLDivElement> & { draggable?: boolean };
 }) {
+  const [expanded, setExpanded] = useState(false);
   return (
     <div
       {...dragProps}
@@ -119,24 +238,59 @@ function Card({
               <span className="text-muted"> ({item.year})</span>
             )}
           </div>
-          {item.streaming && item.streaming.length > 0 ? (
-            <div className="mt-1 flex flex-wrap gap-1">
-              {item.streaming.slice(0, 3).map((s) => (
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            {item.streaming && item.streaming.length > 0 ? (
+              canonicalServices(item.streaming).slice(0, 3).map((s) => (
                 <span
                   key={s}
                   className="rounded bg-glow/15 px-1.5 py-0.5 text-[11px] text-glow"
                 >
                   {s}
                 </span>
-              ))}
-            </div>
-          ) : (
-            <div className="mt-1 text-[11px] text-muted">
-              not streaming (US)
+              ))
+            ) : (
+              <span className="text-[11px] text-muted">not streaming (US)</span>
+            )}
+            {item.predicted && (
+              <span
+                className="rounded bg-candle/15 px-1.5 py-0.5 text-[11px] text-candle"
+                title="Louie's projected score based on your taste"
+              >
+                Louie predicts {item.predicted.replace("-", "–")}
+              </span>
+            )}
+          </div>
+          {item.note && (
+            <div className={`mt-1 text-xs text-muted ${expanded ? "" : "line-clamp-2"}`}>
+              {item.note}
             </div>
           )}
-          {item.note && (
-            <div className="mt-1 line-clamp-2 text-xs text-muted">{item.note}</div>
+          {(item.note || item.overview) && (
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="mt-0.5 text-[11px] font-medium text-glow hover:underline"
+            >
+              {expanded ? "Show less" : "Show more"}
+            </button>
+          )}
+          {expanded && (item.note || item.predicted) && (
+            <div className="mt-1.5 rounded-md border border-card-border bg-background/60 p-2 text-xs leading-relaxed text-muted">
+              <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold text-foreground">
+                Why Louie picked this
+                {item.predicted && (
+                  <span className="rounded bg-candle/15 px-1.5 py-0.5 font-normal text-candle">
+                    projected {item.predicted.replace("-", "–")}/10
+                  </span>
+                )}
+              </div>
+              {item.note || "No note yet."}
+            </div>
+          )}
+          {expanded && item.overview && (
+            <div className="mt-1.5 rounded-md border border-card-border bg-background/60 p-2 text-xs leading-relaxed text-muted">
+              <div className="mb-1 text-[11px] font-semibold text-foreground">Synopsis</div>
+              {item.overview}
+            </div>
           )}
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <a
@@ -179,6 +333,9 @@ export default function Watchlist({
 }) {
   const [user, setUser] = useState<WatchItem[]>([]);
   const [suggestions, setSuggestions] = useState<WatchItem[]>([]);
+  const [notInterested, setNotInterested] = useState<VetoItem[]>([]);
+  const [showVetoes, setShowVetoes] = useState(false);
+  const [removingVeto, setRemovingVeto] = useState<Set<string>>(new Set());
   const [loaded, setLoaded] = useState(false);
   const [reviewing, setReviewing] = useState<string | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -202,11 +359,11 @@ export default function Watchlist({
     });
   }
 
-  const services = [...new Set([...user, ...suggestions].flatMap((i) => i.streaming ?? []))].sort();
+  const services = canonicalServices([...user, ...suggestions].flatMap((i) => i.streaming ?? [])).sort();
   // view-only filter: hide items available ONLY on excluded services; items with
   // no streaming data always show, and nothing is ever removed from the data
   const visible = (i: WatchItem) =>
-    !i.streaming?.length || i.streaming.some((s) => !excluded.has(s));
+    !i.streaming?.length || i.streaming.some((s) => !excluded.has(canonicalService(s)));
 
   const refetch = useCallback(() => {
     fetch("/api/watchlist")
@@ -214,6 +371,7 @@ export default function Watchlist({
       .then((d) => {
         setUser(d.user ?? []);
         setSuggestions(d.suggestions ?? []);
+        setNotInterested(d.notInterested ?? []);
         setLoaded(true);
       })
       .catch(() => {});
@@ -230,6 +388,27 @@ export default function Watchlist({
     refetch();
   }
 
+  // fire-and-forget — caller already applied the change locally; the turn-end
+  // refetch reconciles if a write ever fails
+  const save = (body: Record<string, unknown>) =>
+    void fetch("/api/watchlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+  function move(title: string, to: number) {
+    setUser((u) => {
+      const i = u.findIndex((x) => x.title === title);
+      if (i === -1 || i === to) return u;
+      const next = [...u];
+      const [it] = next.splice(i, 1);
+      next.splice(Math.max(0, Math.min(to, next.length)), 0, it);
+      return next;
+    });
+    save({ action: "move", title, to });
+  }
+
   function markWatched(item: WatchItem, rating: number, review: string) {
     const year =
       item.year && !item.title.includes(`(${item.year})`) ? ` (${item.year})` : "";
@@ -238,18 +417,67 @@ export default function Watchlist({
     const result = onChat(
       `I watched ${item.title}${year} — ${rating}/10.${review ? ` ${review}` : ""}`,
       () => {
+        // (silent turn: nothing rendered in chat; the pill below is the UI)
         void post({ action: "remove", title: item.title });
         setPending((p) => {
           const next = new Set(p);
           next.delete(item.title);
           return next;
         });
-      }
+      },
+      { silent: true }
     );
     if (result) {
       setReviewing(null);
       setPending((p) => new Set(p).add(item.title));
     }
+  }
+
+  // plain removal from the user's own list — no veto, they might add it back
+  // later. Optimistic, same pattern as move/snooze. A reason (optional) is
+  // worth a taste-profile signal even though the removal itself is free —
+  // only bothers the agent when there's actually something to record.
+  function removeFromMine(item: WatchItem, reason: string) {
+    setUser((u) => u.filter((x) => x.title !== item.title));
+    save({ action: "remove", title: item.title });
+    if (reason) {
+      const year =
+        item.year && !item.title.includes(`(${item.year})`) ? ` (${item.year})` : "";
+      onChat(`${item.title}${year} — ${reason}`, undefined, { silent: true, tag: "watchlist-remove" });
+    }
+  }
+
+  // permanent veto: pull the card off whichever list it's on now (optimistic),
+  // then a silent turn adds it to the hub's Not interested section (using the
+  // reason as the bullet's note, if given) and strips any matching Watchlist
+  // bullet so it can't resurface as a suggestion
+  function addVeto(item: WatchItem, fromMine: boolean, reason: string) {
+    const year =
+      item.year && !item.title.includes(`(${item.year})`) ? ` (${item.year})` : "";
+    if (fromMine) {
+      setUser((u) => u.filter((x) => x.title !== item.title));
+      save({ action: "remove", title: item.title });
+    } else {
+      setSuggestions((s) => s.filter((x) => x.title !== item.title));
+    }
+    const label = `${item.title}${year}${reason ? ` — ${reason}` : ""}`;
+    onChat(label, undefined, { silent: true, tag: "not-interested-add" });
+  }
+
+  function removeVeto(title: string) {
+    const result = onChat(
+      title,
+      () => {
+        setNotInterested((v) => v.filter((x) => x.title !== title));
+        setRemovingVeto((p) => {
+          const next = new Set(p);
+          next.delete(title);
+          return next;
+        });
+      },
+      { silent: true, tag: "not-interested-remove" }
+    );
+    if (result) setRemovingVeto((p) => new Set(p).add(title));
   }
 
   return (
@@ -279,7 +507,7 @@ export default function Watchlist({
       <section>
         <div className="mb-2 text-sm font-medium text-glow">My watchlist</div>
         <div className="mb-2 text-xs text-muted">
-          Yours alone — drag to reorder, or use Top / the position picker.
+          Yours alone — drag to reorder, or use the position picker.
         </div>
         {loaded && user.length === 0 && (
           <div className="rounded-lg border border-card-border bg-card p-4 text-xs text-muted">
@@ -306,30 +534,16 @@ export default function Watchlist({
                 onDragOver: (e) => e.preventDefault(),
                 onDrop: () => {
                   if (dragIdx !== null && dragIdx !== i)
-                    post({ action: "move", title: user[dragIdx].title, to: i });
+                    move(user[dragIdx].title, i);
                   setDragIdx(null);
                 },
               }}
               controls={
                 <>
-                  {i > 0 && (
-                    <button
-                      onClick={() => post({ action: "move", title: item.title, to: 0 })}
-                      className="rounded-md border border-card-border px-2 py-0.5 text-[11px] text-muted hover:border-glow/60 hover:text-glow"
-                    >
-                      Top
-                    </button>
-                  )}
                   {user.length > 1 && (
                     <select
                       value={i + 1}
-                      onChange={(e) =>
-                        post({
-                          action: "move",
-                          title: item.title,
-                          to: Number(e.target.value) - 1,
-                        })
-                      }
+                      onChange={(e) => move(item.title, Number(e.target.value) - 1)}
                       className="rounded-md border border-card-border bg-card px-1 py-0.5 text-[11px] text-muted"
                       title="Position in the ranking"
                     >
@@ -340,6 +554,16 @@ export default function Watchlist({
                       ))}
                     </select>
                   )}
+                  <MoreMenu
+                    items={[
+                      { label: "Remove", onConfirm: (reason) => removeFromMine(item, reason) },
+                      {
+                        label: "Not interested",
+                        tone: "danger",
+                        onConfirm: (reason) => addVeto(item, true, reason),
+                      },
+                    ]}
+                  />
                 </>
               }
             />
@@ -381,24 +605,83 @@ export default function Watchlist({
                         year: item.year,
                         media: item.media,
                         note: item.note,
+                        predicted: item.predicted,
                       })
                     }
                     className="rounded-md border border-glow/50 px-2 py-0.5 text-[11px] text-glow hover:bg-glow/10"
                   >
                     + My watchlist
                   </button>
-                  <button
-                    onClick={() => post({ action: "snooze", title: item.title })}
-                    title="Hide this suggestion for a couple of weeks"
-                    className="rounded-md border border-card-border px-2 py-0.5 text-[11px] text-muted hover:border-ember/60 hover:text-ember"
-                  >
-                    Not now
-                  </button>
+                  <MoreMenu
+                    items={[
+                      {
+                        label: "Not now",
+                        instant: true,
+                        onConfirm: () => {
+                          setSuggestions((s) => s.filter((x) => x.title !== item.title));
+                          save({ action: "snooze", title: item.title });
+                        },
+                      },
+                      {
+                        label: "Not interested",
+                        tone: "danger",
+                        onConfirm: (reason) => addVeto(item, false, reason),
+                      },
+                    ]}
+                  />
                 </>
               }
             />
           ))}
         </div>
+      </section>
+
+      <section>
+        <button
+          onClick={() => setShowVetoes((v) => !v)}
+          className="flex w-full items-center gap-1.5 text-left text-sm font-medium text-muted hover:text-foreground"
+        >
+          <span className={`transition-transform ${showVetoes ? "rotate-90" : ""}`}>›</span>
+          Not interested{notInterested.length > 0 && ` (${notInterested.length})`}
+        </button>
+        {showVetoes && (
+          <>
+            <div className="mb-2 mt-1 text-xs text-muted">
+              Never suggested again — remove one if you change your mind.
+            </div>
+            {notInterested.length === 0 ? (
+              <div className="rounded-lg border border-card-border bg-card p-4 text-xs text-muted">
+                Nothing here — say &ldquo;don&apos;t suggest X&rdquo; in chat to add one.
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {notInterested.map((item) => (
+                  <div
+                    key={item.title}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-card-border bg-card px-3 py-2 text-xs"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">{item.title}</div>
+                      {item.note && <div className="truncate text-muted">{item.note}</div>}
+                    </div>
+                    {removingVeto.has(item.title) ? (
+                      <span className="shrink-0 animate-pulse rounded-md border border-glow/40 px-2 py-0.5 text-[11px] text-glow">
+                        removing…
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => removeVeto(item.title)}
+                        className="shrink-0 rounded-md border border-card-border px-2 py-0.5 text-[11px] text-muted hover:border-glow/60 hover:text-glow"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </section>
     </div>
   );
