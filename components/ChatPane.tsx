@@ -183,10 +183,12 @@ function LouieHero() {
 export default function ChatPane({
   onTurnEnd,
   onTrace,
+  onOpenHelp,
   sendRef,
 }: {
   onTurnEnd: () => void;
   onTrace: (t: TraceEntry) => void;
+  onOpenHelp?: () => void;
   sendRef?: MutableRefObject<ChatSend>;
 }) {
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -403,6 +405,14 @@ export default function ChatPane({
             <div className="mt-4 text-xs text-muted opacity-70">
               or just type — &ldquo;I watched Heat, loved it&rdquo;
             </div>
+            {onOpenHelp && (
+              <button
+                onClick={onOpenHelp}
+                className="mt-5 text-xs text-muted underline decoration-dotted underline-offset-4 hover:text-glow"
+              >
+                New here? Start with Help
+              </button>
+            )}
           </div>
         )}
         {messages.map((msg, i) => {

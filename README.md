@@ -23,7 +23,8 @@ key, asks where to keep your wiki, and scaffolds a fresh one if you don't have o
 npm run dev        # open http://localhost:3000
 ```
 
-Re-run `./install.sh` any time — it's safe and idempotent.
+Re-run `./install.sh` any time — it's safe and idempotent. `install.sh` is a **bash script**;
+on Windows that means running it from **Git Bash** (see below) rather than PowerShell or cmd.
 
 ### Prerequisites
 
@@ -32,7 +33,127 @@ Re-run `./install.sh` any time — it's safe and idempotent.
   info, and details
 - For the in-app chat expert: an **`ANTHROPIC_API_KEY`** (https://console.anthropic.com) *or*
   a logged-in [Claude Code](https://claude.com/claude-code) CLI. The graph and watchlist work
-  without it; only the chat needs Claude access.
+  without it; only the chat needs Claude access. See **Connect to Claude** below.
+- **Windows only:** [Git for Windows](https://git-scm.com/downloads/win) (`git-scm.com`). See
+  why below.
+
+## Installing on macOS
+
+1. **Install Node 20+.** Either the installer from [nodejs.org](https://nodejs.org), or via
+   [Homebrew](https://brew.sh):
+   ```bash
+   brew install node
+   ```
+2. **Git** is already on macOS (via Xcode Command Line Tools) — if `git --version` in Terminal
+   prompts you to install them, accept and it'll be ready in a minute.
+3. **Clone and install:**
+   ```bash
+   git clone https://github.com/<you>/marquee.git
+   cd marquee
+   ./install.sh
+   ```
+4. **Run it:**
+   ```bash
+   npm run dev
+   ```
+   Open http://localhost:3000.
+
+## Installing on Windows
+
+Windows works the same once you're set up, but there's one wrinkle: **`install.sh` is a bash
+script**, and Windows' native shells (PowerShell, cmd.exe) can't run `.sh` files. The standard
+fix is **[Git for Windows](https://git-scm.com/downloads/win)** — installing it gives you both
+`git` itself *and* **Git Bash**, a bash terminal that runs shell scripts like this one correctly
+on Windows. This is the one thing macOS users get for free (Git + a POSIX shell) that Windows
+needs an extra install for.
+
+1. **Install [Git for Windows](https://git-scm.com/downloads/win).** Run the installer with the
+   defaults — that's enough to get both `git` and Git Bash. (Alternative: if you already use
+   **WSL2** — Windows Subsystem for Linux — that works too and behaves like native Linux; skip
+   Git for Windows and follow the macOS/Linux steps inside your WSL terminal instead.)
+2. **Install Node 20+** from [nodejs.org](https://nodejs.org) — get the **Windows Installer
+   (.msi)**. Run it with the defaults. Node installed this way is on your Windows PATH, so
+   both PowerShell *and* Git Bash can see `node`/`npm`.
+3. **Open Git Bash** (Start menu → "Git Bash"). All the following commands go in Git Bash, not
+   PowerShell:
+   ```bash
+   git clone https://github.com/<you>/marquee.git
+   cd marquee
+   ./install.sh
+   ```
+4. **Run it** — from Git Bash *or* PowerShell, doesn't matter once installed:
+   ```
+   npm run dev
+   ```
+   Open http://localhost:3000 in your browser.
+
+**Don't want to install Git Bash?** You can skip `install.sh` entirely and set up by hand from
+PowerShell:
+```powershell
+# clone via GitHub Desktop, or `git` if you have it any other way
+cd marquee
+copy .env.example .env.local
+notepad .env.local     # fill in TMDB_API_KEY and VAULT_PATH by hand
+npm install
+npm run dev
+```
+
+## Connect to Claude
+
+The chat expert (the "Louie" persona you talk to) runs on **Claude**, via the Claude Agent SDK.
+Two ways to authorize it — pick whichever's easier:
+
+**Option A — API key.** Get one at https://console.anthropic.com/settings/keys, then either
+paste it when `install.sh` asks, or add it to `.env.local` yourself:
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
+Same file, same variable, on both macOS and Windows.
+
+**Option B — Claude Code CLI login** (no key needed in `.env.local`). Install the CLI globally
+and log in once:
+```bash
+npm install -g @anthropic-ai/claude-code
+claude
+```
+The first run walks you through login in your browser. This works identically in Terminal
+(macOS) or Git Bash / PowerShell (Windows) — `npm install -g` puts `claude` on your PATH either
+way. Once logged in, Marquee's chat expert uses that session automatically; nothing else to
+configure.
+
+`install.sh` checks for both automatically and tells you which one it found.
+
+### Connect Claude Desktop (optional)
+
+Because the wiki is just a folder, you can also talk to your movie expert from **Claude
+Desktop** — it reads and writes the same database the app visualizes. `install.sh` offers to
+wire this up automatically (step 8) on both macOS and Windows. To do it by hand, add a
+filesystem MCP server pointed at your wiki to Claude Desktop's config file:
+
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json` (typically
+  `C:\Users\<you>\AppData\Roaming\Claude\claude_desktop_config.json`)
+
+```json
+{
+  "mcpServers": {
+    "marquee-wiki": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/absolute/path/to/your/wiki"]
+    }
+  }
+}
+```
+
+Restart Claude Desktop after editing. Then add the `movie-expert` skill (or paste
+`.claude/skills/movie-expert/SKILL.md` as project instructions) so Claude Desktop behaves like
+the in-app expert against your wiki.
+
+**Windows path note:** if you ran `install.sh` from Git Bash, the wiki path it wrote might look
+like `/c/Users/you/marquee-wiki` (Git Bash's POSIX-style path). Claude Desktop is a native
+Windows app and needs a native path in the config — if the connection doesn't work, open
+`claude_desktop_config.json` and change it to `C:\\Users\\you\\marquee-wiki` (double backslashes
+in JSON).
 
 ## How it works
 
@@ -97,45 +218,59 @@ signals, rewrite the hub's ~15-bullet taste digest, and date-stamp superseded cl
 `Taste Profile.md` (claims are never silently deleted — taste drift is data). Cheap
 incremental updates drift; the periodic rebuild is what keeps the indexes trustworthy.
 
-## Connect Claude Desktop
+## Deploying / keeping it running
 
-Because the wiki is just a folder, you can also talk to your movie expert from **Claude
-Desktop** — it reads and writes the same database the app visualizes.
+Marquee is meant to run as a **persistent process on a machine you own** — your laptop, a home
+server, a spare PC — not on a serverless/edge platform like Vercel. Two reasons: the wiki is a
+real folder on disk (`VAULT_PATH`), which serverless functions don't reliably persist between
+requests, and the chat expert runs Claude Code's own executable as a long-lived subprocess,
+which serverless functions aren't built to host. Running it yourself, on your own hardware, is
+the whole design — not a limitation to work around.
 
-`install.sh` offers to set this up automatically. To do it manually, add a filesystem MCP
-server pointed at your wiki to Claude Desktop's config:
+For everyday use, `npm run dev` in a terminal you leave open is enough. For something closer to
+"install once, forget about it," build it and run the production server, kept alive by a
+process manager:
 
-- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "marquee-wiki": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/absolute/path/to/your/wiki"]
-    }
-  }
-}
+**Build once:**
+```bash
+npm run build
 ```
 
-Restart Claude Desktop after editing. Then add the `movie-expert` skill (or paste
-`.claude/skills/movie-expert/SKILL.md` as project instructions) so Claude Desktop behaves like
-the in-app expert against your wiki.
+**macOS/Linux — [pm2](https://pm2.keymetrics.io/) (works from Terminal or Git Bash):**
+```bash
+npm install -g pm2
+pm2 start "npm run start" --name marquee
+pm2 save
+pm2 startup        # prints a command to auto-start pm2 (and Marquee) on login/reboot
+```
 
-## Using it from an iPad
+**Windows — pm2 also works**, with an extra package for boot-time startup:
+```powershell
+npm install -g pm2
+npm install -g pm2-windows-startup
+pm2-startup install
+pm2 start "npm run start" --name marquee
+pm2 save
+```
+(Alternative: Task Scheduler, "run at log on," action = `npm run start` with **Start in** set
+to the `marquee` folder — no extra packages, a bit more manual clicking.)
+
+Either way, check on it any time with `pm2 status` / `pm2 logs marquee`, and stop it with
+`pm2 stop marquee`.
+
+## Using it from an iPad or other devices on your network
 
 Marquee can't be installed *on* an iPad — the dev server needs Node and the app reads your
-wiki from the local filesystem, so it has to run on a Mac or PC. But you can **use** it from an
-iPad over your home network:
+wiki from the local filesystem, so it has to run on a Mac or PC (or a self-hosted server, see
+above). But you can **use** it from any device on your home network:
 
 ```bash
 npm run dev -- -H 0.0.0.0
 ```
 
-Then open `http://<your-computer-ip>:3000` in iPad Safari on the same Wi-Fi. The UI is
-browser-based and works with touch. (The Claude Desktop wiki connection above is Mac/PC only,
-since it runs a local process.)
+Then open `http://<your-computer-ip>:3000` in Safari, Chrome, or Edge on the same Wi-Fi — this
+works on an iPad, another laptop, or a phone. The UI is browser-based and works with touch.
+(The Claude Desktop wiki connection above is Mac/PC only, since it runs a local process.)
 
 ## Scripts
 

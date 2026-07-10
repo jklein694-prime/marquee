@@ -6,7 +6,6 @@
 // chat, watchlist, taste graph, or booth work, update the matching SECTION
 // below in the same change so the guide never drifts from the app.
 
-import { useRef } from "react";
 import { Markdown } from "./ChatPane";
 
 type Section = { id: string; title: string; body: string };
@@ -179,10 +178,12 @@ a reply takes a while, open the Booth to confirm it's working, not frozen. Blue-
 ];
 
 export default function HelpPanel() {
-  const refs = useRef<Record<string, HTMLDivElement | null>>({});
-
+  // scope the lookup to this panel (ids are unique to it while mounted, but be
+  // explicit) and scroll to the section header
   const jump = (id: string) =>
-    refs.current[id]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document
+      .getElementById(`help-${id}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   return (
     <div className="flex h-full flex-col">
@@ -206,13 +207,7 @@ export default function HelpPanel() {
           </p>
         </div>
         {SECTIONS.map((s) => (
-          <section
-            key={s.id}
-            ref={(el) => {
-              refs.current[s.id] = el;
-            }}
-            className="mb-6 scroll-mt-2"
-          >
+          <section key={s.id} id={`help-${s.id}`} className="mb-6 scroll-mt-2">
             <h2 className="mb-1.5 border-b border-card-border/60 pb-1 text-sm font-semibold text-glow">
               {s.title}
             </h2>

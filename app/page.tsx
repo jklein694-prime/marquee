@@ -46,12 +46,13 @@ function Booth({ entries }: { entries: TraceEntry[] }) {
   );
 }
 
-type Panel = "graph" | "watchlist" | "booth" | null;
+type Panel = "graph" | "watchlist" | "booth" | "help" | null;
 
 const TABS = [
   ["graph", "Taste Graph"],
   ["watchlist", "Watchlist"],
   ["booth", "Projection Booth"],
+  ["help", "Help"],
 ] as const;
 
 export default function Home() {
@@ -91,6 +92,7 @@ export default function Home() {
         <ChatPane
           onTurnEnd={() => setGraphVersion((v) => v + 1)}
           onTrace={(t) => setTrace((prev) => [...prev, t])}
+          onOpenHelp={() => setPanel("help")}
           sendRef={chatSend}
         />
       </section>
@@ -136,6 +138,8 @@ export default function Home() {
                 version={graphVersion}
                 onChat={(t, onDone, opts) => chatSend.current(t, onDone, opts)}
               />
+            ) : panel === "help" ? (
+              <HelpPanel />
             ) : (
               <Booth entries={trace} />
             )}
