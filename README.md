@@ -26,6 +26,23 @@ npm run dev        # open http://localhost:3000
 Re-run `./install.sh` any time — it's safe and idempotent. `install.sh` is a **bash script**;
 on Windows that means running it from **Git Bash** (see below) rather than PowerShell or cmd.
 
+### Before you ask for a recommendation — build your taste graph first
+
+The very first thing to do on a fresh install is **log a batch of movies and shows you've
+already seen**, with a rating for each — not ask "what should I watch?" Louie's picks come
+entirely from your taste graph, and on a brand-new wiki that graph is empty. Ask for a
+recommendation before logging anything and Louie has nothing to point at: no favorite
+directors, no genres it knows you love, no patterns to reason from.
+
+So spend your first few minutes just talking about what you've watched — "I watched Heat,
+loved it, 9/10," one after another, or run through a director's filmography. Ten or fifteen
+titles is enough for real patterns to emerge. **Then** ask for a recommendation.
+
+**Be patient after that, too.** Every title you log sharpens the graph a little more — Louie
+gets noticeably better at pointing you in the right direction after 20 logs than after 5, and
+keeps improving from there. Don't judge it off the first session; the more you use it, the
+more it knows.
+
 ### Prerequisites
 
 - **Node 20+** and npm (https://nodejs.org)

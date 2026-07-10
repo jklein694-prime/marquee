@@ -21,7 +21,15 @@ full width.
 
 Louie has no conversational memory between sessions — instead it keeps a linked
 wiki of your taste that grows every time you talk. It handles **movies and TV
-shows** together unless you narrow it ("a movie tonight", "a series to binge").`,
+shows** together unless you narrow it ("a movie tonight", "a series to binge").
+
+**Start here if your wiki is new:** log a batch of titles you've already seen,
+with a rating for each, *before* asking for a recommendation — see "Building
+your profile" below. On an empty graph Louie has no favorite directors, genres,
+or patterns of yours to work from, so a pick request just gets a generic guess.
+Ten or fifteen logged titles is enough for real patterns to show up. Be patient
+after that too — the graph keeps sharpening the more you use it, and picks
+noticeably improve between your 5th and your 20th logged title.`,
   },
   {
     id: "chatting",
@@ -45,7 +53,10 @@ While Louie is still working, an unanswered widget is locked and shows
   {
     id: "finding",
     title: "Finding a pick",
-    body: `Ask for a recommendation and Louie first offers a fork:
+    body: `*New wiki? Log some watched titles first (see "Building your profile") — a
+recommendation is only as good as the taste graph behind it.*
+
+Ask for a recommendation and Louie first offers a fork:
 
 - **Guided survey** — one quick round of questions covering up to four of: **mood**
   (laugh / edge-of-seat / think / comfort), **genre or era**, **time commitment**,
@@ -74,7 +85,8 @@ your taste and where it's streaming.`,
   {
     id: "profile",
     title: "Building your profile",
-    body: `Tell Louie **"I watched X"** (or use **Watched it** on the Watchlist) and it records:
+    body: `**This is where to start on a new wiki.** Tell Louie **"I watched X"** (or use
+**Watched it** on the Watchlist) and it records:
 
 - a row in your **Seen** ledger — your verdict (loved / liked / meh / disliked), a
   1–10 rating, and a short note;
