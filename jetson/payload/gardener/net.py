@@ -2,8 +2,8 @@
 during a deliberate window (model download, git sync, Sonnet audit). The
 gardener and llama-server never use the network.
 
-Thin wrapper over nmcli. Python 3.6 stdlib only (universal_newlines, no
-text=/capture_output=).
+Thin wrapper over nmcli. Python 3.6 stdlib only — uses universal_newlines
+rather than the 3.7 subprocess conveniences.
 """
 import subprocess
 
