@@ -23,7 +23,19 @@ NEIGHBOR_CHARS = 800  # ~200 tokens each
 MAX_PAGES_LISTED = 120
 
 
-def _template(name):
+def _template(name, vault=None):
+    """The prompt template for `name`. A per-vault override at
+    <vault>/prompts/<name>.txt wins over the shipped default — so users can
+    fine-tune prompts for their own LLM work, the overrides sync with the
+    vault via git, and upgrades (which touch /opt, not the vault) never clobber
+    them. The override must keep the same {named} placeholders and any
+    __TOKEN__ the code injects, or rendering would fail — the dashboard editor
+    validates this before saving."""
+    if vault is not None:
+        override = os.path.join(vault.root, "prompts", "%s.txt" % name)
+        if os.path.isfile(override):
+            with open(override, encoding="utf-8") as fh:
+                return fh.read()
     with open(os.path.join(PROMPTS_DIR, "%s.txt" % name), encoding="utf-8") as fh:
         return fh.read()
 
@@ -34,7 +46,7 @@ def system_prompt(vault):
     so str.format is off the table)."""
     desc = vault.profile.vault_description
     blurb = " This wiki is %s." % desc.rstrip(".") if desc else ""
-    return _template("system").replace("__VAULT_DESCRIPTION__", blurb).strip()
+    return _template("system", vault).replace("__VAULT_DESCRIPTION__", blurb).strip()
 
 
 def _truncate(text, limit):
@@ -185,7 +197,7 @@ def render(vault, state, item):
             if "stub_dir" in context
             else ""
         )
-        user = _template("dead_link").format(
+        user = _template("dead_link", vault).format(
             target=item["target"],
             where=item["where"],
             file=source_rel,
@@ -222,7 +234,7 @@ def render(vault, state, item):
                     if n != name and os.path.dirname(pages[n]) == own_dir
                 ]
             neighbors = candidates[:3]
-        user = _template("orphan").format(
+        user = _template("orphan", vault).format(
             target=name,
             orphan_file=vault.relpath(pages[name]),
             page=_page_excerpt(vault, pages[name]),
@@ -237,7 +249,7 @@ def render(vault, state, item):
         if name not in pages:
             raise TaskRenderError("sampled page vanished: %r" % name)
         neighbors = sample.pick_neighbors(vault, state, name)
-        user = _template("enrich").format(
+        user = _template("enrich", vault).format(
             file=vault.relpath(pages[name]),
             page=_page_excerpt(vault, pages[name]),
             neighbors=_neighbors_block(vault, neighbors),
@@ -250,7 +262,7 @@ def render(vault, state, item):
         resolved = vault.resolve(rel)
         if not resolved or not os.path.isfile(resolved):
             raise TaskRenderError("correction file missing: %r" % rel)
-        user = _template("correction").format(
+        user = _template("correction", vault).format(
             file=rel,
             instruction=item["instruction"],
             page=_page_excerpt(vault, resolved),

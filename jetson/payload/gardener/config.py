@@ -20,6 +20,16 @@ DEFAULTS = {
     "TEMPERATURE": "0.3",
     "LLM_TIMEOUT_SEC": "600",
     "TIER_OVERRIDE": "",
+    # connected-appliance additions
+    "DASHBOARD_PORT": "8088",
+    "DASHBOARD_BIND": "0.0.0.0",
+    "DASHBOARD_TOKEN_FILE": "/etc/wikigardener/dashboard.token",
+    "MODELS_DIR": "/opt/wikigardener/models",
+    "MODELS_CATALOG": "/opt/wikigardener/models.catalog",
+    "RUNTIME_ENV": "/etc/wikigardener/runtime.env",
+    "JOBS_DIR": "/var/lib/wikigardener/jobs",
+    "GIT_REMOTE": "",
+    "GIT_BRANCH": "main",
 }
 
 _INT_KEYS = (
@@ -29,6 +39,7 @@ _INT_KEYS = (
     "CTX",
     "MAX_TOKENS",
     "LLM_TIMEOUT_SEC",
+    "DASHBOARD_PORT",
 )
 _FLOAT_KEYS = ("TEMPERATURE",)
 

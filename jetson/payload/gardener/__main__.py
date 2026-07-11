@@ -3,7 +3,7 @@ import argparse
 import json
 import sys
 
-from . import daemon, lint, llm, sample
+from . import daemon, lint, llm, net, sample
 from .config import Config
 from .gitops import Git
 from .vaultio import Vault
@@ -20,7 +20,17 @@ def main(argv=None):
     sub.add_parser("queue", help="list pending work")
     sub.add_parser("lint", help="print the vault lint report")
     sub.add_parser("seed-queue", help="refill the queue from lint + sampling")
+    net_p = sub.add_parser("net", help="wifi radio control (on|off|status)")
+    net_p.add_argument("action", choices=("on", "off", "status"))
     args = parser.parse_args(argv)
+
+    if args.command == "net":
+        if args.action == "status":
+            print(json.dumps(net.status(), indent=2, sort_keys=True))
+            return 0
+        ok, out = (net.on() if args.action == "on" else net.off())
+        print(out)
+        return 0 if ok else 1
 
     cfg = Config(path=args.conf)
     vault = Vault(cfg.vault_dir)
