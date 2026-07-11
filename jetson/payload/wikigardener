@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# wikigardener — the one command you type on the device.
+#   wikigardener setup            # interactive setup wizard
+#   wikigardener status|net|sync|models|lint|queue|run-once|web ...  -> gardener CLI
+usent=/opt/wikigardener
+case "${1:-}" in
+  setup) shift; exec sudo bash "$usent/setup-wizard.sh" "$@" ;;
+  ""|-h|--help)
+    echo "usage: wikigardener {setup|status|net|sync|models|lint|queue|run-once|web} ..."
+    echo "  setup                 interactive wizard (wifi, dashboard, sync, model, prompts)"
+    echo "  status                health, queue counts, current model"
+    echo "  net on|off|status     wifi radio"
+    echo "  sync                  push/pull the vault to your computer"
+    echo "  models list|download|use|rm"
+    exec true ;;
+  *) exec env PYTHONPATH="$usent" python3 -m gardener "$@" ;;
+esac

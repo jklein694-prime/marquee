@@ -19,7 +19,7 @@ echo "==> checking expected paths"
 # shellcheck source=../PINS.env
 source "$JETSON/PINS.env"
 for path in \
-  install.sh preflight.sh uninstall.sh PINS.env \
+  install.sh preflight.sh uninstall.sh setup-wizard.sh wikigardener PINS.env \
   config/gardener.conf \
   systemd/llama-server.service systemd/gardener.service systemd/gardener.timer \
   gardener/__main__.py gardener/daemon.py gardener/patch.py \

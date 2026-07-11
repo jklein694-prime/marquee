@@ -92,6 +92,13 @@ rsync -a --delete "$PAYLOAD_DIR/gardener/" "$OPT/gardener/"
 rsync -a "$PAYLOAD_DIR/audit/" "$OPT/audit/"
 cp -n "$PAYLOAD_DIR/config/gardener.conf" "$ETC/gardener.conf"
 cp -n "$PAYLOAD_DIR/models.catalog" "$OPT/models.catalog"
+install -m 755 "$PAYLOAD_DIR/setup-wizard.sh" "$OPT/setup-wizard.sh"
+install -m 755 "$PAYLOAD_DIR/wikigardener" /usr/local/bin/wikigardener
+# login hint until setup is done
+cat > /etc/profile.d/wikigardener-setup.sh <<'EOF'
+[ -f "$HOME/.wikigardener-setup-done" ] || \
+  echo "wikigardener: run 'wikigardener setup' to finish (wifi, dashboard, sync, model)"
+EOF
 
 # --- 2b. connected-appliance plumbing --------------------------------------------
 # background-jobs dir + dashboard token (random if absent, printed once)

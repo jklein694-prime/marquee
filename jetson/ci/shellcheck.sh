@@ -14,7 +14,10 @@ shellcheck -x -e SC1091 \
   "$JETSON"/payload/install.sh \
   "$JETSON"/payload/preflight.sh \
   "$JETSON"/payload/uninstall.sh \
+  "$JETSON"/payload/setup-wizard.sh \
+  "$JETSON"/payload/wikigardener \
   "$JETSON"/payload/audit/audit.sh \
+  "$JETSON"/laptop/*.sh \
   "$JETSON"/ci/*.sh
 
 echo "shellcheck: OK"
