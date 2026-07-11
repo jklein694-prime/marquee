@@ -1,0 +1,19 @@
+[Unit]
+Description=wikigardener LAN control dashboard
+After=llama-server.service
+
+[Service]
+# runs as an unprivileged user; the narrow sudoers allowlist
+# (/etc/sudoers.d/wikigardener) lets it start/stop the gardener units,
+# restart llama-server, toggle wifi, and run the audit — nothing else
+User=wikigardener
+Group=wikigardener
+Environment=PYTHONPATH=/opt/wikigardener
+ExecStart=/usr/bin/python3 -m gardener web
+WorkingDirectory=/var/lib/wikigardener
+Restart=always
+RestartSec=5
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

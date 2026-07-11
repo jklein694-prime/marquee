@@ -1,0 +1,10 @@
+# Narrow allowlist for the unprivileged dashboard user. The web server runs as
+# `wikigardener` and may ONLY run these exact commands as root — it can operate
+# the gardener but cannot get a shell or touch anything else.
+wikigardener ALL=(root) NOPASSWD: /bin/systemctl start gardener.service
+wikigardener ALL=(root) NOPASSWD: /bin/systemctl stop gardener.timer
+wikigardener ALL=(root) NOPASSWD: /bin/systemctl start gardener.timer
+wikigardener ALL=(root) NOPASSWD: /bin/systemctl restart llama-server
+wikigardener ALL=(root) NOPASSWD: /usr/bin/nmcli radio wifi on
+wikigardener ALL=(root) NOPASSWD: /usr/bin/nmcli radio wifi off
+wikigardener ALL=(root) NOPASSWD: /bin/bash /opt/wikigardener/audit/audit.sh

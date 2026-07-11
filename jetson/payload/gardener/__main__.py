@@ -32,6 +32,9 @@ def main(argv=None):
     sync_p.add_argument(
         "--allow-offline", action="store_true", help="skip the connectivity check"
     )
+    web_p = sub.add_parser("web", help="serve the LAN control dashboard")
+    web_p.add_argument("--host")
+    web_p.add_argument("--port", type=int)
     args = parser.parse_args(argv)
 
     if args.command == "net":
@@ -57,6 +60,12 @@ def main(argv=None):
         result = sync_mod.sync(cfg, require_online=not args.allow_offline)
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result.get("outcome") in ("ok", "disabled", "skipped") else 1
+
+    if args.command == "web":
+        from . import webui
+
+        webui.serve(cfg, host=args.host, port=args.port)
+        return 0
 
     if args.command == "run-once":
         result = daemon.run_once(cfg, dry_run=args.dry_run)
