@@ -3,11 +3,12 @@ Description=wikigardener LAN control dashboard
 After=llama-server.service
 
 [Service]
-# runs as an unprivileged user; the narrow sudoers allowlist
-# (/etc/sudoers.d/wikigardener) lets it start/stop the gardener units,
-# restart llama-server, toggle wifi, and run the audit — nothing else
-User=wikigardener
-Group=wikigardener
+# Runs as root, consistent with the rest of the all-root appliance (gardener,
+# llama-server, audit). The security boundary is the setup-time dashboard
+# token (HttpOnly SameSite=Strict cookie, checked constant-time), the CSRF
+# header + same-origin check on every mutation, and scoping the port to your
+# LAN. Hardening to an unprivileged user is possible later but needs a shared
+# vault owner to avoid git "dubious ownership".
 Environment=PYTHONPATH=/opt/wikigardener
 ExecStart=/usr/bin/python3 -m gardener web
 WorkingDirectory=/var/lib/wikigardener

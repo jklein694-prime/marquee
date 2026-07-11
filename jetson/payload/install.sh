@@ -91,6 +91,17 @@ done
 rsync -a --delete "$PAYLOAD_DIR/gardener/" "$OPT/gardener/"
 rsync -a "$PAYLOAD_DIR/audit/" "$OPT/audit/"
 cp -n "$PAYLOAD_DIR/config/gardener.conf" "$ETC/gardener.conf"
+cp -n "$PAYLOAD_DIR/models.catalog" "$OPT/models.catalog"
+
+# --- 2b. connected-appliance plumbing --------------------------------------------
+# background-jobs dir + dashboard token (random if absent, printed once)
+mkdir -p "$VAR/jobs"
+if [ ! -f "$ETC/dashboard.token" ]; then
+  head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$ETC/dashboard.token"
+  echo >> "$ETC/dashboard.token"
+  echo "   generated dashboard token (set your own in \`wikigardener setup\`)"
+fi
+chmod 600 "$ETC/dashboard.token"
 
 # tier-dependent memory ceiling for the model server
 if [ "$TIER" = "1.5b" ]; then MEMORY_MAX=2600M; else MEMORY_MAX=1200M; fi
@@ -155,9 +166,14 @@ sed "s/__MEMORY_MAX__/$MEMORY_MAX/" \
 cp "$PAYLOAD_DIR/systemd/gardener.service" /etc/systemd/system/
 sed "s/__INTERVAL_MIN__/${INTERVAL_MIN:-15}/" \
   "$PAYLOAD_DIR/systemd/gardener.timer" > /etc/systemd/system/gardener.timer
+cp "$PAYLOAD_DIR/systemd/wikigardener-web.service" /etc/systemd/system/
+cp "$PAYLOAD_DIR/systemd/wikigardener-sync.service" /etc/systemd/system/
+cp "$PAYLOAD_DIR/systemd/wikigardener-sync.timer" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now llama-server.service
 systemctl enable gardener.timer
+systemctl enable --now wikigardener-web.service
+systemctl enable wikigardener-sync.timer
 
 # --- 5. self-test ----------------------------------------------------------------
 echo "== self-test"
@@ -184,14 +200,18 @@ PYTHONPATH="$OPT" python3 -m gardener run-once --dry-run
 
 systemctl start gardener.timer
 
+IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 cat <<EOF
 
 == wikigardener installed ==
   tier:     $TIER ($MODEL_FILE)
   engine:   llama.cpp ${LLAMACPP_TAG} [$LLAMA_VARIANT]
   vault:    $VAR/vault   (git repo; every change is a commit)
-  services: llama-server.service (running), gardener.timer (every ${INTERVAL_MIN:-15}min)
+  services: llama-server, gardener.timer (${INTERVAL_MIN:-15}min), wikigardener-web, wikigardener-sync.timer
 
+  dashboard:       http://${IP:-<nano-ip>}:$(sed -n 's/^DASHBOARD_PORT=//p' "$ETC/gardener.conf" | head -1)
+                   password: contents of $ETC/dashboard.token
+  finish setup:    wikigardener setup    (wifi, git sync, models, prompts)
   watch it work:   journalctl -fu gardener
   status:          PYTHONPATH=$OPT python3 -m gardener status
   audit window:    sudo bash $OPT/audit/audit.sh   (only when you connect WiFi)

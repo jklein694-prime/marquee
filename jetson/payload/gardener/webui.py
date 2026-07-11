@@ -42,7 +42,10 @@ def read_token(cfg):
 
 
 def _systemctl(*args):
-    return subprocess.call(["sudo", "-n", "systemctl"] + list(args))
+    # the dashboard service runs as root (consistent with the rest of the
+    # all-root system); the security boundary is the token + CSRF + same-origin
+    # check + LAN firewall, not process privilege
+    return subprocess.call(["systemctl"] + list(args))
 
 
 def action_timer(cfg, params):

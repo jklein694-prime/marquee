@@ -5,18 +5,19 @@ set -euo pipefail
 
 [ "$(id -u)" = 0 ] || { echo "run as root: sudo bash uninstall.sh" >&2; exit 1; }
 
-systemctl disable --now gardener.timer 2>/dev/null || true
-systemctl disable --now gardener.service 2>/dev/null || true
-systemctl disable --now llama-server.service 2>/dev/null || true
-rm -f /etc/systemd/system/gardener.timer \
-      /etc/systemd/system/gardener.service \
-      /etc/systemd/system/llama-server.service
+for unit in gardener.timer gardener.service llama-server.service \
+            wikigardener-web.service wikigardener-sync.timer \
+            wikigardener-sync.service; do
+  systemctl disable --now "$unit" 2>/dev/null || true
+  rm -f "/etc/systemd/system/$unit"
+done
 systemctl daemon-reload
 
 rm -rf /opt/wikigardener
 rm -rf /etc/wikigardener
 rm -rf /var/lib/wikigardener/queue /var/lib/wikigardener/state.json \
-       /var/lib/wikigardener/build.log
+       /var/lib/wikigardener/build.log /var/lib/wikigardener/jobs \
+       /var/lib/wikigardener/vault.lock
 
 if [ "${1:-}" = "--purge-vault" ]; then
   rm -rf /var/lib/wikigardener

@@ -24,6 +24,11 @@ for path in \
   systemd/llama-server.service systemd/gardener.service systemd/gardener.timer \
   gardener/__main__.py gardener/daemon.py gardener/patch.py \
   gardener/profile.py gardener/prompts/system.txt \
+  gardener/models.py gardener/sync.py gardener/webui.py gardener/net.py \
+  gardener/jobs.py gardener/lock.py \
+  models.catalog \
+  systemd/wikigardener-web.service systemd/wikigardener-sync.service \
+  systemd/wikigardener-sync.timer \
   profiles/marquee-movies.conf profiles/generic.conf \
   audit/audit.sh audit/audit.py audit/audit-system.txt \
   "models/$MODEL_1_5B_FILE" "models/$MODEL_0_5B_FILE" \
