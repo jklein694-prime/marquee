@@ -18,6 +18,7 @@ shellcheck -x -e SC1091 \
   "$JETSON"/payload/wikigardener \
   "$JETSON"/payload/audit/audit.sh \
   "$JETSON"/laptop/*.sh \
+  "$JETSON"/image/build-image.sh \
   "$JETSON"/ci/*.sh
 
 echo "shellcheck: OK"

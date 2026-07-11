@@ -1,0 +1,19 @@
+[Unit]
+Description=wikigardener first-boot install (runs install.sh once, then removes itself)
+# run after the network/filesystem are up; on the real Nano the L4T rootfs
+# auto-resize also runs early — this is ordered after basic bring-up
+After=multi-user.target
+ConditionPathExists=/opt/wikigardener-firstboot/install.sh
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# install.sh builds llama.cpp on-device (~20-40 min) and sets everything up
+TimeoutStartSec=3600
+ExecStart=/bin/bash /opt/wikigardener-firstboot/install.sh
+# self-disable so it never runs again, regardless of success
+ExecStartPost=/bin/systemctl disable wikigardener-firstboot.service
+ExecStartPost=/bin/sh -c 'rm -f /etc/systemd/system/multi-user.target.wants/wikigardener-firstboot.service'
+
+[Install]
+WantedBy=multi-user.target
