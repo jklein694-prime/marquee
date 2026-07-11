@@ -1,5 +1,9 @@
 # wikigardener — air-gapped wiki gardener for the original Jetson Nano
 
+> **New here?** For the exact hands-on walkthrough — reset the microSD, flash it,
+> boot headless, and SSH in — see **[QUICKSTART.md](QUICKSTART.md)**. This README
+> is the full reference.
+
 A small local LLM (Qwen2.5-Instruct, running on llama.cpp) lives on your
 Jetson Nano and tends a copy of your Obsidian wiki around the clock, fully
 offline: it repairs broken wikilinks, adopts orphan pages, removes stale
