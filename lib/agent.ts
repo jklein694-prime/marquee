@@ -175,6 +175,34 @@ export function runTurn(
       permissionMode: "bypassPermissions", // unattended vault writes
       settingSources: ["project"], // vault hooks work; user-level skills not double-loaded
       includePartialMessages: true,
+      // The SDK's Agent tool now defaults to run_in_background: true — it returns
+      // an agentId immediately and notifies later. This app runs each turn as a
+      // one-shot request that ends on the result message, which kills the
+      // background subagent before it produces anything (the model then narrates
+      // "results in a moment" and ends with no cards). We need subagents
+      // SYNCHRONOUS: dispatch → block → results in the same turn → present.
+      // Force it deterministically here so it never depends on the model
+      // remembering to pass the flag. Covers researcher, pattern-miner, page-writer.
+      hooks: {
+        PreToolUse: [
+          {
+            hooks: [
+              async (input) => {
+                const i = input as { tool_name?: string; tool_input?: Record<string, unknown> };
+                if (i.tool_name === "Agent") {
+                  return {
+                    hookSpecificOutput: {
+                      hookEventName: "PreToolUse" as const,
+                      updatedInput: { ...(i.tool_input ?? {}), run_in_background: false },
+                    },
+                  };
+                }
+                return { continue: true };
+              },
+            ],
+          },
+        ],
+      },
       mcpServers: { ui, tmdb },
       allowedTools: [
         "Read", "Grep", "Glob", "Bash", "Edit", "Write", "Task",

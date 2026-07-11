@@ -16,12 +16,12 @@ function trailerHref(item: WatchItem): string {
   );
 }
 
-function ReviewForm({
-  item,
+export function ReviewForm({
+  title,
   onSubmit,
   onCancel,
 }: {
-  item: WatchItem;
+  title: string;
   onSubmit: (rating: number, review: string) => void;
   onCancel: () => void;
 }) {
@@ -30,7 +30,7 @@ function ReviewForm({
   return (
     <div className="mt-2 rounded-md border border-card-border bg-background/60 p-2.5">
       <div className="mb-1.5 text-xs text-muted">
-        How was {item.title}? Rate it:
+        How was {title}? Rate it:
       </div>
       <div className="flex gap-1">
         {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
@@ -318,7 +318,7 @@ function Card({
         </div>
       </div>
       {reviewing && !pending && (
-        <ReviewForm item={item} onSubmit={onReviewSubmit} onCancel={onReviewCancel} />
+        <ReviewForm title={item.title} onSubmit={onReviewSubmit} onCancel={onReviewCancel} />
       )}
     </div>
   );

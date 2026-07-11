@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import ChatPane, { ChatSend, TraceEntry } from "@/components/ChatPane";
 import GraphView from "@/components/GraphView";
 import Watchlist from "@/components/Watchlist";
+import QuickRate from "@/components/QuickRate";
 import HelpPanel from "@/components/HelpPanel";
 
 const KIND_STYLE: Record<TraceEntry["kind"], string> = {
@@ -46,11 +47,12 @@ function Booth({ entries }: { entries: TraceEntry[] }) {
   );
 }
 
-type Panel = "graph" | "watchlist" | "booth" | "help" | null;
+type Panel = "graph" | "watchlist" | "rate" | "booth" | "help" | null;
 
 const TABS = [
   ["graph", "Taste Graph"],
   ["watchlist", "Watchlist"],
+  ["rate", "Quick Rate"],
   ["booth", "Projection Booth"],
   ["help", "Help"],
 ] as const;
@@ -138,6 +140,8 @@ export default function Home() {
                 version={graphVersion}
                 onChat={(t, onDone, opts) => chatSend.current(t, onDone, opts)}
               />
+            ) : panel === "rate" ? (
+              <QuickRate onChat={(t, onDone, opts) => chatSend.current(t, onDone, opts)} />
             ) : panel === "help" ? (
               <HelpPanel />
             ) : (
