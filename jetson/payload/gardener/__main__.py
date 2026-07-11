@@ -3,7 +3,7 @@ import argparse
 import json
 import sys
 
-from . import daemon, lint, llm, models, net, sample
+from . import daemon, lint, llm, models, net, sample, sync as sync_mod
 from .config import Config
 from .gitops import Git
 from .vaultio import Vault
@@ -28,6 +28,10 @@ def main(argv=None):
     )
     models_p.add_argument("target", nargs="?", help="catalog id, .gguf URL, or filename")
     models_p.add_argument("--force", action="store_true", help="ignore RAM-tier fit")
+    sync_p = sub.add_parser("sync", help="git push/pull the vault to your computer")
+    sync_p.add_argument(
+        "--allow-offline", action="store_true", help="skip the connectivity check"
+    )
     args = parser.parse_args(argv)
 
     if args.command == "net":
@@ -48,6 +52,11 @@ def main(argv=None):
         except RuntimeError as exc:
             print("error: %s" % exc, file=sys.stderr)
             return 1
+
+    if args.command == "sync":
+        result = sync_mod.sync(cfg, require_online=not args.allow_offline)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result.get("outcome") in ("ok", "disabled", "skipped") else 1
 
     if args.command == "run-once":
         result = daemon.run_once(cfg, dry_run=args.dry_run)

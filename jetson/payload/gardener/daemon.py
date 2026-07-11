@@ -6,7 +6,7 @@ provides the loop and the duty cycle.
 import os
 import time
 
-from . import lint, llm, sample, tasks
+from . import lint, llm, lock, sample, tasks
 from .gitops import Git
 from .patch import Patch, PatchError, extract_json
 from .vaultio import Vault
@@ -71,6 +71,16 @@ def _refill(queue, vault, state, cfg, rng, today):
 
 
 def run_once(cfg, dry_run=False, rng=None, today=None):
+    """One gardening cycle, holding the vault lock so git-sync never lands
+    between a queue claim and its commit. Dry runs don't mutate, so they skip
+    the lock (and never block on a stuck one)."""
+    if dry_run:
+        return _run_once_impl(cfg, dry_run, rng, today)
+    with lock.vault_lock(lock.lock_path_for(cfg)):
+        return _run_once_impl(cfg, dry_run, rng, today)
+
+
+def _run_once_impl(cfg, dry_run=False, rng=None, today=None):
     """One gardening cycle. Returns a status dict (also the CLI's output)."""
     today = today or time.strftime("%Y-%m-%d")
     vault = Vault(cfg.vault_dir)

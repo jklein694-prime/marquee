@@ -1,0 +1,16 @@
+[Unit]
+Description=Sync the wiki vault to your computer (git push/pull)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH=/opt/wikigardener
+ExecStart=/usr/bin/python3 -m gardener sync
+WorkingDirectory=/var/lib/wikigardener/vault
+Nice=10
+# a big pull over slow WiFi shouldn't hang forever
+TimeoutStartSec=10min
+
+[Install]
+WantedBy=multi-user.target

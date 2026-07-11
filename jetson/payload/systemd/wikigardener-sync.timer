@@ -1,0 +1,13 @@
+[Unit]
+Description=Periodically sync the vault when online
+
+[Timer]
+# hourly attempt; sync.py no-ops cleanly when offline or GIT_REMOTE is unset,
+# so this is safe to leave enabled in the hybrid (mostly-offline) posture
+OnBootSec=15min
+OnUnitInactiveSec=1h
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target

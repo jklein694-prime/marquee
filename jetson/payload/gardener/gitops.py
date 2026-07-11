@@ -27,6 +27,18 @@ class Git(object):
             )
         return proc.stdout.strip()
 
+    def _run_rc(self, *args):
+        """(returncode, output) — for callers that must inspect status rather
+        than treat non-zero as fatal (sync's pull/push/rebase)."""
+        proc = subprocess.run(
+            ("git",) + args,
+            cwd=self.workdir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+        )
+        return proc.returncode, proc.stdout.strip()
+
     def is_repo(self):
         try:
             return (
@@ -88,3 +100,28 @@ class Git(object):
 
     def revert(self, sha):
         self._run("revert", "--no-edit", sha)
+
+    # -- remote sync (all rc-inspecting; the wrapper otherwise raises) --------
+
+    def remote_set(self, url, name="origin"):
+        """Point `name` at url, adding or updating it."""
+        rc, _ = self._run_rc("remote", "get-url", name)
+        if rc == 0:
+            self._run("remote", "set-url", name, url)
+        else:
+            self._run("remote", "add", name, url)
+
+    def has_remote(self, name="origin"):
+        rc, _ = self._run_rc("remote", "get-url", name)
+        return rc == 0
+
+    def pull_rebase(self, branch, remote="origin"):
+        """(ok, output). ok=False leaves a possibly-mid-rebase tree the caller
+        must clean up (see rebase_abort)."""
+        return self._run_rc("pull", "--rebase", remote, branch)
+
+    def rebase_abort(self):
+        self._run_rc("rebase", "--abort")
+
+    def push(self, branch, remote="origin"):
+        return self._run_rc("push", remote, "HEAD:%s" % branch)
