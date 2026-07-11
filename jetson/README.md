@@ -40,7 +40,11 @@ The gardener still runs fully offline 24/7; you flip WiFi on when you want to:
   Password is the token in `/etc/wikigardener/dashboard.token`.
 - **Download / switch models** (`wikigardener models …` or the dashboard): a
   curated catalog plus any Hugging Face `.gguf` URL; refuses models too big for
-  your board's RAM and rolls back if a new model won't start.
+  your board's RAM and rolls back if a new model won't start. Any GGUF whose
+  architecture the pinned llama.cpp (`b2275`) supports works — Qwen 1.5/2/2.5,
+  Llama 1/2/3, Mistral, Phi-2, Gemma 1, and more. Newer architectures (Qwen3,
+  Gemma 2/3, **Nemotron**) need a newer `LLAMACPP_TAG` that won't build on
+  JetPack 4.6 — see the Nemotron note below.
 - **Git sync** to your computer or GitHub (`wikigardener sync`, or hourly): the
   vault is a git repo, so this is push/pull with conflict-safe rebase.
 - **Tune prompts** for your specific LLM work: edit them in the dashboard or in
@@ -213,6 +217,21 @@ JSON corrections block) and its corrections enter the queue
 at top priority — `revert` corrections are applied mechanically via git, the
 rest are handed to the local model one at a time. The vault gets an
 `audit/<date>` tag, which becomes the baseline for the next audit.
+
+## Nemotron / bigger models (needs an Orin, not the original Nano)
+
+NVIDIA Nemotron is staged in `models.catalog` (`ram_tier = orin`) but **cannot
+run on the original Jetson Nano** on two counts: the smallest Nemotron is 4B
+(too big for the shared 4GB — a 256GB flash drive is storage, not RAM, and
+swap-running a 4B is unusably slow), and its architecture needs a 2025-era
+llama.cpp that will not build on JetPack 4.6 / GCC 7 / CUDA 10.2. The model
+manager therefore refuses it here ("✗tier" in the picker).
+
+It becomes a first-class option on an **Orin Nano (8GB, JetPack 5/6)**: bump
+`LLAMACPP_TAG` to a current release (the newer glibc/CUDA there build it
+fine), and the staged catalog entries light up. An Orin also lets Claude Code
+run on-device. If you move to an Orin, ping me to wire a proper "orin" build
+variant (newer pin + JetPack 5/6 preflight).
 
 ## 2GB Nano notes
 

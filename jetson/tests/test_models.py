@@ -64,6 +64,23 @@ def test_tier_fits():
     # 'below' board refuses everything; 'unknown' (dev host) allows
     assert not models.tier_fits("0.5b", "below")
     assert models.tier_fits("1.5b", "unknown")
+    # orin-tier models (Nemotron 4B) are refused on any original-Nano tier
+    assert not models.tier_fits("orin", "1.5b")
+    assert not models.tier_fits("orin", "0.5b")
+
+
+def test_shipped_catalog_refuses_nemotron_on_nano():
+    import os as _os
+
+    from conftest import JETSON
+
+    catalog = models.load_catalog(
+        _os.path.join(JETSON, "payload", "models.catalog")
+    )
+    assert "nemotron-mini-4b" in catalog
+    assert catalog["nemotron-mini-4b"]["ram_tier"] == "orin"
+    # a 4GB Nano detects as "1.5b" -> Nemotron does not fit
+    assert not models.tier_fits(catalog["nemotron-mini-4b"]["ram_tier"], "1.5b")
 
 
 def test_detect_tier(tmp_path):

@@ -14,8 +14,10 @@ import shutil
 import subprocess
 import urllib.request
 
-# minimum-board thresholds, mirrored from preflight.sh
-_TIER_ORDER = ["0.5b", "1.5b", "3b"]
+# minimum-board thresholds, mirrored from preflight.sh. "orin" is a staged
+# tier above anything the original Nano can detect, so orin-tagged models
+# (e.g. Nemotron 4B) are always refused here until Orin support is added.
+_TIER_ORDER = ["0.5b", "1.5b", "3b", "orin"]
 
 
 def detect_tier(meminfo="/proc/meminfo"):
