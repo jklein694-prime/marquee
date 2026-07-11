@@ -24,14 +24,36 @@ source "$JETSON/PINS.env"
 OUT="wikigardener-jetson.img"
 VAULT="$JETSON/vault-template"
 COMPRESS=0
+WIFI_SSID="" WIFI_PASS="" WIFI_COUNTRY="US" HOSTNAME_="wikigardener"
+SSH_PASS="" SSH_KEY="" USER_NAME="gardener"
 while [ $# -gt 0 ]; do
   case "$1" in
     --out) OUT="$2"; shift 2 ;;
     --vault) VAULT="$2"; shift 2 ;;
     --xz) COMPRESS=1; shift ;;
+    --wifi-ssid) WIFI_SSID="$2"; shift 2 ;;
+    --wifi-pass) WIFI_PASS="$2"; shift 2 ;;
+    --wifi-country) WIFI_COUNTRY="$2"; shift 2 ;;
+    --hostname) HOSTNAME_="$2"; shift 2 ;;
+    --ssh-pass) SSH_PASS="$2"; shift 2 ;;
+    --ssh-key) SSH_KEY="$2"; shift 2 ;;
+    --user) USER_NAME="$2"; shift 2 ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
   esac
 done
+
+# --wifi-ssid auto -> the SSID this build machine is currently on ("same wifi
+# my computer is on"). Password can't be auto-extracted; pass --wifi-pass.
+if [ "$WIFI_SSID" = auto ]; then
+  WIFI_SSID="$(
+    iwgetid -r 2>/dev/null \
+      || nmcli -t -f active,ssid dev wifi 2>/dev/null | awk -F: '$1=="yes"{print $2; exit}' \
+      || networksetup -getairportnetwork en0 2>/dev/null | sed 's/^.*: //' \
+      || true
+  )"
+  [ -n "$WIFI_SSID" ] && echo "==> auto-detected WiFi SSID: $WIFI_SSID" \
+    || echo "==> could not auto-detect SSID — pass --wifi-ssid <name>"
+fi
 
 [ "$(id -u)" = 0 ] || { echo "run as root (loop devices + mount): sudo $0 ..." >&2; exit 1; }
 [ "$(uname -s)" = Linux ] || { echo "Linux only — use a privileged Linux VM on mac/win" >&2; exit 1; }
@@ -109,19 +131,37 @@ ln -sf /etc/systemd/system/wikigardener-firstboot.service \
 # --- 5. headless user preseed (robust path around L4T's oem-config) --------------
 # [HW] oem-config sentinel names vary by L4T revision; the fallback (let
 # oem-config run once on a monitor) is documented in the README.
+echo "==> baking WiFi / SSH / hostname into the rootfs"
+PRESEED_ARGS=(--hostname "$HOSTNAME_" --user "$USER_NAME" --wifi-country "$WIFI_COUNTRY")
+[ -n "$WIFI_SSID" ] && PRESEED_ARGS+=(--wifi-ssid "$WIFI_SSID" --wifi-pass "$WIFI_PASS")
+[ -n "$SSH_PASS" ] && PRESEED_ARGS+=(--ssh-pass "$SSH_PASS")
+[ -n "$SSH_KEY" ] && PRESEED_ARGS+=(--ssh-key "$SSH_KEY")
+bash "$HERE/headless-preseed.sh" "$MNT" "${PRESEED_ARGS[@]}"
+
 echo "==> preseeding a login user + disabling nv-oem-config"
 if command -v qemu-aarch64-static >/dev/null 2>&1; then
   cp "$(command -v qemu-aarch64-static)" "$MNT/usr/bin/" || true
-  chroot "$MNT" /usr/bin/qemu-aarch64-static /bin/bash -euc '
-    id gardener >/dev/null 2>&1 || useradd -m -s /bin/bash -G sudo gardener
-    echo "gardener:wikigardener" | chpasswd
-    chage -d 0 gardener   # force password change on first login
+  # a set password (or an installed key) makes headless SSH work, so we do NOT
+  # force a password change — that would block non-interactive first login
+  # shellcheck disable=SC2016  # $WG_USER is meant to expand inside the chroot, not here
+  WG_USER="$USER_NAME" chroot "$MNT" /usr/bin/qemu-aarch64-static /bin/bash -euc '
+    user="$WG_USER"
+    id "$user" >/dev/null 2>&1 || useradd -m -s /bin/bash -G sudo "$user"
+    if [ -f /root/.wg-ssh-pass ]; then
+      printf "%s:%s\n" "$user" "$(cat /root/.wg-ssh-pass)" | chpasswd
+      rm -f /root/.wg-ssh-pass
+    else
+      echo "$user:wikigardener" | chpasswd
+      chage -d 0 "$user"   # no password given -> force change on first login
+    fi
+    # the key files staged by headless-preseed get the right owner now
+    [ -d "/home/$user/.ssh" ] && chown -R "$user":"$user" "/home/$user/.ssh"
   ' || echo "   [warn] chroot preseed failed — fall back to on-monitor oem-config"
   rm -f "$MNT/usr/bin/qemu-aarch64-static"
 else
-  echo "   [warn] qemu-aarch64-static not installed — skipping preseed."
-  echo "          Install qemu-user-static, or complete NVIDIA's oem-config on a"
-  echo "          monitor once (the firstboot unit still runs afterward)."
+  echo "   [warn] qemu-aarch64-static not installed — skipping user preseed."
+  echo "          Install qemu-user-static, or complete NVIDIA's oem-config over"
+  echo "          USB-serial / a monitor once (the firstboot unit still runs)."
 fi
 # disable the L4T first-boot wizard so ours runs unattended
 rm -f "$MNT/etc/systemd/system/multi-user.target.wants/nv-oem-config.service" 2>/dev/null || true

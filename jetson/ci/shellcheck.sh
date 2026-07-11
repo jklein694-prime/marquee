@@ -19,6 +19,7 @@ shellcheck -x -e SC1091 \
   "$JETSON"/payload/audit/audit.sh \
   "$JETSON"/laptop/*.sh \
   "$JETSON"/image/build-image.sh \
+  "$JETSON"/image/headless-preseed.sh \
   "$JETSON"/ci/*.sh
 
 echo "shellcheck: OK"

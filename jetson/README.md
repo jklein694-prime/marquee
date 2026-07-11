@@ -112,6 +112,52 @@ image and running `install.sh` from USB (§2) — identical payload, proven path
 Run it on Linux as root (loop devices + ext4); on mac/Windows use a privileged
 Linux VM.
 
+## 1c. Headless first boot (no keyboard/monitor)
+
+Goal: power the Nano on, it joins your WiFi, and you `ssh` in — never attaching
+a keyboard. The catch: the Jetson's config lives on an **ext4** partition (no
+FAT boot partition like a Raspberry Pi), and stock JetPack's first boot
+normally *forces* an interactive account/EULA step on a display. Two ways
+around it:
+
+**Zero-touch (needs Linux or Docker to build the image).** Bake WiFi + SSH +
+hostname in, then it's truly plug-and-go:
+
+```bash
+sudo ./jetson/image/build-image.sh --vault /path/to/vault \
+  --wifi-ssid auto --wifi-pass 'your-wifi-password' \
+  --hostname wikigardener --ssh-pass 'a-login-password'
+```
+`--wifi-ssid auto` picks the network **your build machine is on**. On a Mac
+with no Linux box, run that same command inside a privileged Docker container
+(Docker Desktop's Linux VM can do the loop-mount). Flash the resulting `.img`,
+power on, then from your Mac: `ssh gardener@wikigardener.local`. Already flashed
+a stock card on a Linux box? Mount its `APP` partition and run
+`sudo ./jetson/image/headless-preseed.sh /mnt/APP --wifi-ssid … --wifi-pass … --ssh-pass …`.
+
+**No-VM path (macOS only — one cable, still no keyboard).** Flash stock JetPack
+(§1), then do the one-time account setup over the **USB serial console** — no
+monitor:
+
+```bash
+# micro-USB cable from the Nano to your Mac, then:
+ls /dev/tty.usbmodem*                 # find the Nano
+screen /dev/tty.usbmodemXXXX 115200   # (exit later with Ctrl-A then K)
+```
+Power on the Nano; complete the account setup in that serial session (create
+`gardener`). Then run `install.sh` and `wikigardener setup` — the wizard joins
+your WiFi, sets the hostname, enables SSH, and sets your password. After that,
+unplug the cable: every future boot is headless, reachable at
+`ssh gardener@wikigardener.local` (or `ssh gardener@192.168.55.1` over the USB
+cable anytime).
+
+**Caveats (both paths):** the original Nano has **no built-in WiFi** — your
+USB/M.2 dongle's chipset must be in JetPack 4.6's kernel (Realtek
+RTL8188/8192/8821, Intel 8265/9260, …); an unsupported dongle won't connect no
+matter the config (`dmesg | grep -i wlan` to check). `<hostname>.local` uses
+Bonjour, built into macOS. A baked image contains your WiFi password in
+plaintext — don't share the `.img`.
+
 ## 2. Install (on the Nano, offline)
 
 ```bash
