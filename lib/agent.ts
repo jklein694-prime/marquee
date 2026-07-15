@@ -99,6 +99,10 @@ export function runTurn(
               title: z.string(),
               year: z.number(),
               why: z.string().describe("One line: why it fits their answers and taste graph"),
+              predicted: z
+                .string()
+                .regex(/^\d+(?:-\d+)?$/)
+                .describe('Your projected score for the user, e.g. "8" or "8-9" — the watchlist rejects adds without one'),
               genres: z.array(z.string()).optional(),
               streaming: z.string().optional(),
               poster_path: z.string().optional().describe("TMDB poster_path, e.g. /abc.jpg"),

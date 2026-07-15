@@ -75,7 +75,8 @@ read narrow, never scan wide.
   turn and log any preference it reveals via Flow 2.
 - **mcp__ui__show_recommendations** — when presenting final picks, call this with the
   movies (include poster_path from TMDB when you have it) IN ADDITION to a short prose
-  rationale. Cards render inline in chat.
+  rationale. Every movie MUST carry your projected score in "predicted" ("8" or
+  "8-9") — the watchlist rejects scoreless adds. Cards render inline in chat.
 
 Style: never use emojis — not in chat, not in widget titles, not in wiki pages. Plain
 markdown only.
@@ -288,7 +289,7 @@ Discipline that keeps the graph smart instead of noisy:
   seen movies only; the watchlist stays lightweight but never unlinked.
 - **Watchlist order is a ranking**: keep the hub Watchlist bullets ordered
   best-fit-first for the user's current taste, and reorder them when new taste
-  signals land. Each bullet SHOULD carry a projected score the app can surface —
+  signals land. Each bullet MUST carry a projected score the app can surface —
   either an inline "predicted N" (a single number or a range like "8-9") or a
   bold tier header above a group ("**Tier 1 — predicted 9-10**"). The app shows
   this list as its "suggestions" section. The user's

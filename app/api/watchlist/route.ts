@@ -37,6 +37,12 @@ export async function POST(request: NextRequest) {
   if (body.action === "add") {
     if (!body.title)
       return NextResponse.json({ error: "missing title" }, { status: 400 });
+    // invariant: every watchlist entry carries Louie's projected score
+    if (typeof body.predicted !== "string" || !/^\d+(?:-\d+)?$/.test(body.predicted))
+      return NextResponse.json(
+        { error: 'missing predicted — every add needs Louie\'s projected score, e.g. "8" or "7-8"' },
+        { status: 400 }
+      );
     if (idx(body.title) === -1) {
       const item: WatchItem = await enrich({
         title: body.title,

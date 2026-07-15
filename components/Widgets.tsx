@@ -19,6 +19,7 @@ export interface RecsData {
     title: string;
     year: number;
     why: string;
+    predicted?: string; // Louie's projected score, e.g. "8-9"; optional only for pre-schema legacy cards
     genres?: string[];
     streaming?: string;
     poster_path?: string;
@@ -262,8 +263,9 @@ export function MovieCards({ data }: { data: RecsData }) {
             )}
             <button
               onClick={() => {
-                setAdded((a) => new Set(a).add(`${m.title}-${m.year}`));
-                void fetch("/api/watchlist", {
+                const key = `${m.title}-${m.year}`;
+                setAdded((a) => new Set(a).add(key));
+                fetch("/api/watchlist", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
@@ -271,8 +273,15 @@ export function MovieCards({ data }: { data: RecsData }) {
                     title: m.title,
                     year: m.year,
                     note: m.why,
+                    predicted: m.predicted,
                   }),
-                });
+                })
+                  .then((r) => {
+                    // e.g. a stale tab whose card predates a required field — don't
+                    // claim success when the write was rejected
+                    if (!r.ok) setAdded((a) => { const n = new Set(a); n.delete(key); return n; });
+                  })
+                  .catch(() => setAdded((a) => { const n = new Set(a); n.delete(key); return n; }));
               }}
               disabled={added.has(`${m.title}-${m.year}`)}
               className="mt-2 w-full rounded-md border border-glow/50 py-1 text-xs text-glow hover:bg-glow/10 disabled:opacity-60"
