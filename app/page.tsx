@@ -5,7 +5,9 @@ import ChatPane, { ChatSend, TraceEntry } from "@/components/ChatPane";
 import GraphView from "@/components/GraphView";
 import Watchlist from "@/components/Watchlist";
 import QuickRate from "@/components/QuickRate";
+import PredictPanel from "@/components/PredictPanel";
 import HelpPanel from "@/components/HelpPanel";
+import { emitThinking, traceToThinking } from "@/lib/liveThinking";
 
 const KIND_STYLE: Record<TraceEntry["kind"], string> = {
   init: "text-muted",
@@ -48,13 +50,14 @@ function Booth({ entries }: { entries: TraceEntry[] }) {
 }
 
 // "more" is a mobile-only view: a full-screen list of the secondary panels
-// (Booth, Help) reached from the bottom-nav "More" tab. Desktop never sets it.
-type Panel = "graph" | "watchlist" | "rate" | "booth" | "help" | "more" | null;
+// (Screen Test, Booth, Help) reached from the bottom-nav "More" tab. Desktop never sets it.
+type Panel = "graph" | "watchlist" | "rate" | "predict" | "booth" | "help" | "more" | null;
 
 const TABS = [
   ["graph", "Taste Graph"],
   ["watchlist", "Watchlist"],
   ["rate", "Quick Rate"],
+  ["predict", "Screen Test"],
   ["booth", "Projection Booth"],
   ["help", "Help"],
 ] as const;
@@ -63,6 +66,7 @@ const PANEL_TITLE: Record<Exclude<Panel, null>, string> = {
   graph: "Taste Graph",
   watchlist: "Watchlist",
   rate: "Quick Rate",
+  predict: "Screen Test",
   booth: "Projection Booth",
   help: "Help",
   more: "More",
@@ -81,6 +85,7 @@ const BOTTOM_TABS = [
 // outside-click machinery, it's just another full-screen panel.
 function MorePanel({ onPick }: { onPick: (p: Panel) => void }) {
   const items: [Panel, string, string][] = [
+    ["predict", "Screen Test", "Predict how you'd rate a title before you watch it."],
     ["booth", "Projection Booth", "Live activity log — every tool call, vault write, and subagent dispatch as the expert works."],
     ["help", "Help", "How Marquee works and how to get the best out of it."],
   ];
@@ -103,6 +108,7 @@ function MorePanel({ onPick }: { onPick: (p: Panel) => void }) {
 export default function Home() {
   const [graphVersion, setGraphVersion] = useState(0);
   const [panel, setPanel] = useState<Panel>(null);
+  const [graphMode, setGraphMode] = useState<"2d" | "3d">("2d");
   const [trace, setTrace] = useState<TraceEntry[]>([]);
   const chatSend = useRef<ChatSend>(() => false);
 
@@ -145,13 +151,25 @@ export default function Home() {
           </header>
           <ChatPane
             onTurnEnd={() => setGraphVersion((v) => v + 1)}
-            onTrace={(t) => setTrace((prev) => [...prev, t])}
+            onTrace={(t) => {
+              setTrace((prev) => [...prev, t]);
+              // live 3D show: map wiki-touching tool calls to graph activations
+              const ev = traceToThinking(t);
+              if (ev) emitThinking(ev);
+            }}
             onOpenHelp={() => setPanel("help")}
+            onWatchGraph={() => {
+              setPanel("graph");
+              setGraphMode("3d");
+            }}
             sendRef={chatSend}
           />
         </section>
-        {panel && (
-          <section className="relative flex min-w-0 flex-1 flex-col">
+        {/* stays mounted even when closed so Screen Test's panel — and any
+            screening it is running — survives tab switches and Close */}
+        <section
+          className={`relative min-w-0 flex-1 flex-col ${panel ? "flex" : "hidden"}`}
+        >
             {/* desktop tab strip */}
             <div className="hidden items-center gap-1 border-b border-card-border px-4 py-2 md:flex">
               {TABS.map(([id, label]) => (
@@ -188,9 +206,9 @@ export default function Home() {
             {/* mobile slim title bar — bottom nav handles switching */}
             <div className="flex items-center justify-between border-b border-card-border px-4 py-3 md:hidden">
               <span className="text-sm font-medium text-glow">
-                {PANEL_TITLE[panel]}
+                {panel && PANEL_TITLE[panel]}
               </span>
-              {panel === "booth" || panel === "help" ? (
+              {panel === "predict" || panel === "booth" || panel === "help" ? (
                 <button
                   onClick={() => setPanel("more")}
                   className="text-xs text-muted transition-colors hover:text-glow"
@@ -207,8 +225,11 @@ export default function Home() {
               )}
             </div>
             <div className="min-h-0 flex-1">
+              <div className={panel === "predict" ? "h-full" : "hidden"}>
+                <PredictPanel />
+              </div>
               {panel === "graph" ? (
-                <GraphView version={graphVersion} />
+                <GraphView version={graphVersion} mode={graphMode} onModeChange={setGraphMode} />
               ) : panel === "watchlist" ? (
                 <Watchlist
                   version={graphVersion}
@@ -220,19 +241,18 @@ export default function Home() {
                 <HelpPanel />
               ) : panel === "more" ? (
                 <MorePanel onPick={setPanel} />
-              ) : (
+              ) : panel === "booth" ? (
                 <Booth entries={trace} />
-              )}
+              ) : null}
             </div>
           </section>
-        )}
       </div>
       {/* mobile-only bottom navigation; pads around the home-indicator safe area */}
       <nav className="flex border-t border-card-border pb-[env(safe-area-inset-bottom)] md:hidden">
         {BOTTOM_TABS.map(([id, label]) => {
           const active =
             id === "more"
-              ? panel === "more" || panel === "booth" || panel === "help"
+              ? panel === "more" || panel === "predict" || panel === "booth" || panel === "help"
               : panel === id;
           return (
             <button

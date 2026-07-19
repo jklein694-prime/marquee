@@ -16,7 +16,9 @@ export const CATEGORY_DIRS = DIMENSIONS.map((d) => path.join(MOVIES_DIR, d));
 export const TASTE_DIR = path.join(MOVIES_DIR, "taste"); // deep taste profile, not category pages
 export const HUB = path.join(VAULT, "wiki/entities/Movies.md");
 
-export type NodeKind = "movie" | "genre" | "watchlist" | "taste";
+// "ghost" is client-only: a node forming live in the 3D view (TMDB candidate,
+// page mid-write) — buildGraph never emits it
+export type NodeKind = "movie" | "genre" | "watchlist" | "taste" | "ghost";
 export interface GraphNode {
   id: string;
   label: string;

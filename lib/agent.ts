@@ -1,7 +1,7 @@
 import { query, tool, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import path from "path";
-import { MOVIE_EXPERT_PROMPT, MOVIE_PAGE_TEMPLATE } from "./prompt";
+import { MOVIE_EXPERT_PROMPT, MOVIE_PAGE_TEMPLATE, PREDICT_PROMPT } from "./prompt";
 import { VAULT, MOVIES_DIR, mdFiles } from "./vault";
 import { activeSnoozes, notInterested } from "./watchlist";
 import { search, details, similar, discover } from "./tmdb";
@@ -13,7 +13,7 @@ const ok = (data: unknown) => ({
 // loose title equality: page names swap ":" for " -" and snoozes are lowercased,
 // so compare on lowercased alphanumerics only ("Spider-Man - No Way Home (2021)"
 // == "spider-man: no way home (2021)")
-const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+export const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 // hard gate for recommendation cards: a wiki/movies/ page existing means SEEN
 // (pages exist only for seen titles — ground truth, unlike the trimmed hub
@@ -122,48 +122,7 @@ export function runTurn(
     ],
   });
 
-  const tmdb = createSdkMcpServer({
-    name: "tmdb",
-    tools: [
-      tool(
-        "search_movie",
-        "Search TMDB for a movie or TV show by title (and optional year). Set media:'tv' for shows. Returns id, title, year, media, overview, vote_average, poster_path.",
-        { query: z.string(), year: z.number().optional(), media: z.enum(["movie", "tv"]).optional() },
-        async (a) => ok(await search(a.query, a.year, a.media))
-      ),
-      tool(
-        "movie_details",
-        "Full TMDB details for a movie or TV id: runtime, seasons (tv), genres, director/creator, US streaming providers, poster_path. Set media:'tv' for shows.",
-        { id: z.number(), media: z.enum(["movie", "tv"]).optional() },
-        async (a) => ok(await details(a.id, a.media))
-      ),
-      tool(
-        "similar_movies",
-        "TMDB recommendations similar to a movie or TV id. Set media:'tv' for shows.",
-        { id: z.number(), media: z.enum(["movie", "tv"]).optional() },
-        async (a) => ok(await similar(a.id, a.media))
-      ),
-      tool(
-        "discover",
-        "Discover well-rated movies or TV shows by TMDB genre ids (comma-separated) and/or date range (YYYY-MM-DD). Set media:'tv' for shows.",
-        {
-          media: z.enum(["movie", "tv"]).optional(),
-          with_genres: z.string().optional(),
-          date_gte: z.string().optional(),
-          date_lte: z.string().optional(),
-          sort_by: z.string().optional(),
-        },
-        async (a) => ok(await discover(a))
-      ),
-    ],
-  });
-
-  const tmdbTools = [
-    "mcp__tmdb__search_movie",
-    "mcp__tmdb__movie_details",
-    "mcp__tmdb__similar_movies",
-    "mcp__tmdb__discover",
-  ];
+  const tmdb = makeTmdbServer();
 
   const q = query({
     prompt: promptStream(),
@@ -242,6 +201,129 @@ export function runTurn(
           model: "claude-haiku-4-5",
         },
       },
+    },
+  });
+  return { q, finish };
+}
+
+// shared by the chat turn (runTurn) and the predict turn (runPredictTurn); a
+// fresh server instance per turn matches the SDK's per-query lifecycle
+function makeTmdbServer() {
+  return createSdkMcpServer({
+    name: "tmdb",
+    tools: [
+      tool(
+        "search_movie",
+        "Search TMDB for a movie or TV show by title (and optional year). Set media:'tv' for shows. Returns id, title, year, media, overview, vote_average, poster_path.",
+        { query: z.string(), year: z.number().optional(), media: z.enum(["movie", "tv"]).optional() },
+        async (a) => ok(await search(a.query, a.year, a.media))
+      ),
+      tool(
+        "movie_details",
+        "Full TMDB details for a movie or TV id: runtime, seasons (tv), genres, director/creator, US streaming providers, poster_path. Set media:'tv' for shows.",
+        { id: z.number(), media: z.enum(["movie", "tv"]).optional() },
+        async (a) => ok(await details(a.id, a.media))
+      ),
+      tool(
+        "similar_movies",
+        "TMDB recommendations similar to a movie or TV id. Set media:'tv' for shows.",
+        { id: z.number(), media: z.enum(["movie", "tv"]).optional() },
+        async (a) => ok(await similar(a.id, a.media))
+      ),
+      tool(
+        "discover",
+        "Discover well-rated movies or TV shows by TMDB genre ids (comma-separated) and/or date range (YYYY-MM-DD). Set media:'tv' for shows.",
+        {
+          media: z.enum(["movie", "tv"]).optional(),
+          with_genres: z.string().optional(),
+          date_gte: z.string().optional(),
+          date_lte: z.string().optional(),
+          sort_by: z.string().optional(),
+        },
+        async (a) => ok(await discover(a))
+      ),
+    ],
+  });
+
+}
+
+const tmdbTools = [
+  "mcp__tmdb__search_movie",
+  "mcp__tmdb__movie_details",
+  "mcp__tmdb__similar_movies",
+  "mcp__tmdb__discover",
+];
+
+// Focused one-shot turn behind POST /api/predict (the Screen Test tab). Emits
+// consider/verdict events through its MCP tool handlers; the caller streams
+// them to the client. Deliberately smaller than runTurn: no resume, no
+// settingSources (vault hooks are write-oriented), no subagents, no hooks.
+export function runPredictTurn(userText: string, emit: (ev: object) => void) {
+  // same held-open input stream as runTurn — SDK MCP servers require streaming
+  // input mode or in-process tool calls die with "Stream closed"
+  let finish!: () => void;
+  const turnDone = new Promise<void>((resolve) => (finish = resolve));
+  async function* promptStream() {
+    yield {
+      type: "user" as const,
+      message: { role: "user" as const, content: userText },
+      parent_tool_use_id: null,
+    };
+    await turnDone;
+  }
+
+  const predict = createSdkMcpServer({
+    name: "predict",
+    tools: [
+      tool(
+        "consider",
+        "Report a taste-graph node you are weighing RIGHT NOW. Call once per node, typically 8-20 times per prediction; batching several calls in one message is fine.",
+        {
+          node: z.string().describe('The wiki page title exactly as written, e.g. "Neo-noir" or "Heat (1995)"'),
+          thought: z.string().describe("One plain clause under 12 words — shown to the user verbatim"),
+        },
+        async (a) => {
+          emit({ type: "consider", node: a.node, thought: a.thought });
+          return ok("noted");
+        }
+      ),
+      tool(
+        "verdict",
+        "Deliver the final projected score. Call EXACTLY ONCE, then end your turn.",
+        {
+          predicted: z
+            .string()
+            .regex(/^\d+(?:-\d+)?$/)
+            .describe('"8" or a range "8-9" — same format the watchlist requires'),
+          why: z.string().describe("2-3 plain sentences citing named categories and comparable rated titles"),
+          seen: z.boolean().optional().describe("true when a wiki page shows the user already saw it"),
+          actual: z.number().optional().describe("their actual /10 rating when seen"),
+        },
+        async (a) => {
+          emit({ type: "verdict", ...a });
+          return ok("Recorded. End your turn now.");
+        }
+      ),
+    ],
+  });
+
+  const q = query({
+    prompt: promptStream(),
+    options: {
+      cwd: VAULT,
+      model: "claude-sonnet-4-6",
+      effort: "medium",
+      systemPrompt: PREDICT_PROMPT,
+      permissionMode: "bypassPermissions",
+      includePartialMessages: true,
+      mcpServers: { predict, tmdb: makeTmdbServer() },
+      // this whitelist IS the read-only guarantee: no Write/Edit/Bash/Task exists
+      // in the turn, so the vault and watchlist cannot be touched
+      allowedTools: [
+        "Read", "Grep", "Glob",
+        "mcp__predict__consider", "mcp__predict__verdict",
+        "mcp__tmdb__search_movie", "mcp__tmdb__movie_details",
+      ],
     },
   });
   return { q, finish };
