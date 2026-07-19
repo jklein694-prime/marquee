@@ -5,7 +5,9 @@ import ChatPane, { ChatSend, TraceEntry } from "@/components/ChatPane";
 import GraphView from "@/components/GraphView";
 import Watchlist from "@/components/Watchlist";
 import QuickRate from "@/components/QuickRate";
+import PredictPanel from "@/components/PredictPanel";
 import HelpPanel from "@/components/HelpPanel";
+import { emitThinking, traceToThinking } from "@/lib/liveThinking";
 
 const KIND_STYLE: Record<TraceEntry["kind"], string> = {
   init: "text-muted",
@@ -47,12 +49,13 @@ function Booth({ entries }: { entries: TraceEntry[] }) {
   );
 }
 
-type Panel = "graph" | "watchlist" | "rate" | "booth" | "help" | null;
+type Panel = "graph" | "watchlist" | "rate" | "predict" | "booth" | "help" | null;
 
 const TABS = [
   ["graph", "Taste Graph"],
   ["watchlist", "Watchlist"],
   ["rate", "Quick Rate"],
+  ["predict", "Screen Test"],
   ["booth", "Projection Booth"],
   ["help", "Help"],
 ] as const;
@@ -60,6 +63,7 @@ const TABS = [
 export default function Home() {
   const [graphVersion, setGraphVersion] = useState(0);
   const [panel, setPanel] = useState<Panel>(null);
+  const [graphMode, setGraphMode] = useState<"2d" | "3d">("2d");
   const [trace, setTrace] = useState<TraceEntry[]>([]);
   const chatSend = useRef<ChatSend>(() => false);
 
@@ -93,13 +97,25 @@ export default function Home() {
         </header>
         <ChatPane
           onTurnEnd={() => setGraphVersion((v) => v + 1)}
-          onTrace={(t) => setTrace((prev) => [...prev, t])}
+          onTrace={(t) => {
+            setTrace((prev) => [...prev, t]);
+            // live 3D show: map wiki-touching tool calls to graph activations
+            const ev = traceToThinking(t);
+            if (ev) emitThinking(ev);
+          }}
           onOpenHelp={() => setPanel("help")}
+          onWatchGraph={() => {
+            setPanel("graph");
+            setGraphMode("3d");
+          }}
           sendRef={chatSend}
         />
       </section>
-      {panel && (
-        <section className="relative flex flex-1 flex-col">
+      {/* section stays in the tree even when closed so Screen Test's panel —
+          and any screening it is running — survives tab switches and Close */}
+      <section
+        className={`relative flex-1 flex-col ${panel ? "flex" : "hidden"}`}
+      >
           <div className="flex items-center gap-1 border-b border-card-border px-4 py-2">
             {TABS.map(([id, label]) => (
               <button
@@ -133,8 +149,11 @@ export default function Home() {
             </button>
           </div>
           <div className="min-h-0 flex-1">
+            <div className={panel === "predict" ? "h-full" : "hidden"}>
+              <PredictPanel />
+            </div>
             {panel === "graph" ? (
-              <GraphView version={graphVersion} />
+              <GraphView version={graphVersion} mode={graphMode} onModeChange={setGraphMode} />
             ) : panel === "watchlist" ? (
               <Watchlist
                 version={graphVersion}
@@ -142,14 +161,13 @@ export default function Home() {
               />
             ) : panel === "rate" ? (
               <QuickRate onChat={(t, onDone, opts) => chatSend.current(t, onDone, opts)} />
+            ) : panel === "booth" ? (
+              <Booth entries={trace} />
             ) : panel === "help" ? (
               <HelpPanel />
-            ) : (
-              <Booth entries={trace} />
-            )}
+            ) : null}
           </div>
         </section>
-      )}
     </main>
   );
 }

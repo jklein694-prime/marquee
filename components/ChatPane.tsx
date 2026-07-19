@@ -184,11 +184,13 @@ export default function ChatPane({
   onTurnEnd,
   onTrace,
   onOpenHelp,
+  onWatchGraph,
   sendRef,
 }: {
   onTurnEnd: () => void;
   onTrace: (t: TraceEntry) => void;
   onOpenHelp?: () => void;
+  onWatchGraph?: () => void;
   sendRef?: MutableRefObject<ChatSend>;
 }) {
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -451,6 +453,14 @@ export default function ChatPane({
           >
             Stop
           </button>
+          {onWatchGraph && (
+            <button
+              onClick={onWatchGraph}
+              className="cursor-pointer rounded border border-card-border px-2 py-0.5 text-[11px] text-muted hover:border-glow/60 hover:text-glow"
+            >
+              Watch the graph
+            </button>
+          )}
           <span className="ml-auto min-w-0 truncate pl-3 text-[11px] text-muted">
             tip: {TIPS[tipIdx]}
           </span>
