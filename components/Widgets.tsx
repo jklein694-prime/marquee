@@ -182,7 +182,7 @@ export function MovieChecklist({
                       key={n}
                       disabled={inert}
                       onClick={() => setSeen((s) => ({ ...s, [key]: n }))}
-                      className={`h-6 w-6 rounded text-[11px] leading-none transition-colors ${
+                      className={`h-9 w-9 rounded text-[11px] leading-none transition-colors md:h-6 md:w-6 ${
                         seen[key] === n
                           ? "bg-glow text-background font-semibold"
                           : "border border-card-border text-muted hover:border-glow/60 hover:text-foreground"

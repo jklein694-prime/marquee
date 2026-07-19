@@ -27,6 +27,10 @@ function nodeColor(n: GraphNode): string {
   return KIND_COLORS[n.kind] ?? "#8a8178";
 }
 
+function nodeRadius(n: GraphNode): number {
+  return n.kind === "genre" ? 7 : n.kind === "taste" ? 3.5 : 5;
+}
+
 // force-graph replaces link endpoint strings with node objects after layout
 function endId(end: GraphLink["source"]): string {
   return typeof end === "object" ? (end as unknown as GraphNode).id : end;
@@ -114,7 +118,15 @@ export default function GraphView({ version }: { version: number }) {
           height={size.height}
           graphData={data}
           backgroundColor="#0c0a08"
-          autoPauseRedraw={false}
+          // pad each node's clickable area beyond its drawn radius so taps land on
+          // touch screens (drawn radii are only 3.5–7px); also helps mouse aim
+          nodePointerAreaPaint={(node, color, ctx) => {
+            const n = node as unknown as GraphNode & { x: number; y: number };
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, nodeRadius(n) + 6, 0, 2 * Math.PI);
+            ctx.fill();
+          }}
           linkColor={(l) => (linkActive(l as GraphLink) ? "#f5b942" : "#2a221a")}
           linkWidth={(l) => (linkActive(l as GraphLink) ? 2 : 1)}
           onNodeClick={(node) => {
@@ -125,7 +137,7 @@ export default function GraphView({ version }: { version: number }) {
           nodeCanvasObject={(node, ctx, globalScale) => {
             const n = node as unknown as GraphNode & { x: number; y: number };
             const color = nodeColor(n);
-            const r = n.kind === "genre" ? 7 : n.kind === "taste" ? 3.5 : 5;
+            const r = nodeRadius(n);
             const dimmed = neighborIds ? !neighborIds.has(n.id) : false;
             ctx.save();
             if (dimmed) ctx.globalAlpha = 0.15;
@@ -171,9 +183,17 @@ export default function GraphView({ version }: { version: number }) {
           </div>
           <div className="break-words px-4 pb-4 text-sm">
             {wiki === "loading" && <div className="text-muted">Loading…</div>}
-            {wiki === "missing" && (
-              <div className="text-muted">No wiki page for this node.</div>
-            )}
+            {wiki === "missing" &&
+              // taste nodes are synthesized from a hub bullet, so the bullet is
+              // the content — reporting it "missing" read like a broken page
+              (selected.text ? (
+                <Markdown text={selected.text} />
+              ) : (
+                <div className="text-muted">
+                  Not written up yet — this title is linked from other pages but
+                  has no page of its own.
+                </div>
+              ))}
             {typeof wiki === "object" && wiki && <Markdown text={wiki.content} />}
           </div>
         </div>
