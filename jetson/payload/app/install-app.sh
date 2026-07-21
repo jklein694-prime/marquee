@@ -53,8 +53,26 @@ echo "== pulling $IMAGE (arm64)"
 docker pull "$IMAGE"
 
 echo "== npm ci + next build inside the container (slow on the Nano; one-time per update)"
-docker run --rm -v "$APP_DIR":/app -w /app "$IMAGE" \
-  sh -c "npm ci --no-audit --no-fund && npm run build"
+# the build is the RAM-hungriest moment this device ever sees — pause the
+# resident model server so the 4GB (plus swap) belongs to the compiler
+LLAMA_WAS_ACTIVE=0
+if systemctl is-active --quiet llama-server; then
+  LLAMA_WAS_ACTIVE=1
+  echo "   pausing llama-server for the build (restarted after)"
+  systemctl stop llama-server
+fi
+BUILD_RC=0
+docker run --rm -v "$APP_DIR":/app -w /app \
+  -e NODE_OPTIONS=--max-old-space-size=2048 "$IMAGE" \
+  sh -c "npm ci --no-audit --no-fund && npm run build" || BUILD_RC=$?
+if [ "$LLAMA_WAS_ACTIVE" = 1 ]; then
+  systemctl start llama-server
+fi
+if [ "$BUILD_RC" != 0 ]; then
+  echo "FATAL: app build failed (rc=$BUILD_RC). The gardener is unaffected." >&2
+  echo "Fallback: run the app on your laptop against the git-synced vault." >&2
+  exit "$BUILD_RC"
+fi
 
 echo "== installing wikigardener-app.service"
 API_KEY=""
