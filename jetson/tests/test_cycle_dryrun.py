@@ -316,4 +316,4 @@ def test_cli_run_once_and_status(cfg, capsys, monkeypatch, tmp_path):
     assert rc == 0
     status = json.loads(capsys.readouterr().out)
     assert status["llama_healthy"] is True
-    assert status["pages"] == 5
+    assert status["pages"] == 6  # 5 planted + taste/Taste Profile

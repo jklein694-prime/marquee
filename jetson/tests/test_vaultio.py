@@ -12,6 +12,7 @@ def test_pages_and_underscore_exclusion(fixture_vault):
         "Solaris (1972)",
         "Crime",
         "Neo-noir",
+        "Taste Profile",  # taste/ pages are pages (resolve links, orphanable)
     }
     assert "_index" not in names
 

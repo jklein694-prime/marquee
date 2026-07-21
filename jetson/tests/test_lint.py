@@ -59,6 +59,69 @@ def test_dedup_and_cap(fixture_vault):
     assert len(dead_dupes) >= 1
 
 
+# -- path-style links + index invariants (parity with new lib/lint.ts) --------
+
+
+def test_path_style_links_are_not_dead(fixture_vault):
+    # the stock hub links [[movies/_index]] and [[Taste Profile]] — neither may
+    # be flagged (a false dead-link would become a queued "repair" on the hub)
+    v = Vault(fixture_vault)
+    dead = {i["target"] for i in lint_vault(v) if i["kind"] == "dead_link"}
+    assert "movies/_index" not in dead
+    assert "Taste Profile" not in dead
+
+
+def test_index_mismatch_reported_for_unindexed_pages(fixture_vault):
+    # Crime/Neo-noir are planted on disk but never indexed in genres/_index.md
+    v = Vault(fixture_vault)
+    details = [i["detail"] for i in lint_vault(v) if i["kind"] == "index_mismatch"]
+    assert "genres/_index.md is missing its page [[Crime]]" in details
+    assert "genres/_index.md is missing its page [[Neo-noir]]" in details
+
+
+def test_index_mismatch_listed_but_missing_and_double_indexed(fixture_vault):
+    v = Vault(fixture_vault)
+    genres_idx = os.path.join(fixture_vault, "wiki/movies/genres/_index.md")
+    with open(genres_idx, "a", encoding="utf-8") as fh:
+        fh.write("- [[Crime]] — loves\n- [[Neo-noir]] — loves\n- [[Ghost Genre]] — ?\n")
+    # a page that exists in TWO dimensions and is indexed in both -> exactly-one rule
+    themes_idx = os.path.join(fixture_vault, "wiki/movies/themes/_index.md")
+    with open(themes_idx, "a", encoding="utf-8") as fh:
+        fh.write("- [[Crime]] — cross-listed\n")
+    with open(
+        os.path.join(fixture_vault, "wiki/movies/themes/Crime.md"), "w", encoding="utf-8"
+    ) as fh:
+        fh.write("# Crime (themes copy)\n")
+    details = [i["detail"] for i in lint_vault(v) if i["kind"] == "index_mismatch"]
+    assert (
+        "genres/_index.md lists [[Ghost Genre]] but genres/Ghost Genre.md does not exist"
+        in details
+    )
+    assert any("indexed in both" in d and "[[Crime]]" in d for d in details)
+
+
+def test_index_lint_skipped_without_category_dirs(generic_vault):
+    from gardener.lint import lint_vault as lv
+
+    v = Vault(generic_vault)
+    assert not any(i["kind"] == "index_mismatch" for i in lv(v))
+
+
+def test_not_interested_titles_not_dead_links(fixture_vault):
+    v = Vault(fixture_vault)
+    hub = v.hub
+    with open(hub, "r", encoding="utf-8") as fh:
+        text = fh.read()
+    text = text.replace(
+        "- (empty — unseen titles you've vetoed land here; never suggested again)",
+        "- [[Vetoed Film (2000)]] — never again",
+    )
+    with open(hub, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    dead = {i["target"] for i in lint_vault(v) if i["kind"] == "dead_link"}
+    assert "Vetoed Film (2000)" not in dead
+
+
 # -- autofix parity with lib/lint.ts ------------------------------------------
 
 

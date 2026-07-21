@@ -150,15 +150,20 @@ def test_create_stub_genre_indexes_mechanically(fixture_vault):
         context={"stub_dir": "genres"},
     )
     changed = p.apply()
+    # new stubs land in the genres dimension and get a bullet in ITS sub-index
+    # (the grand index is a routing table, never touched)
     assert set(changed) == {
         "wiki/movies/genres/Heist.md",
-        "wiki/movies/_index.md",
+        "wiki/movies/genres/_index.md",
     }
     index = Vault(fixture_vault).read(
-        os.path.join(fixture_vault, "wiki/movies/_index.md")
+        os.path.join(fixture_vault, "wiki/movies/genres/_index.md")
     )
     assert "- [[Heist]]" in index
-    assert "(none yet)" not in index
+    grand = Vault(fixture_vault).read(
+        os.path.join(fixture_vault, "wiki/movies/_index.md")
+    )
+    assert "[[Heist]]" not in grand
 
 
 def test_hub_allows_retarget_of_dead_link(fixture_vault):

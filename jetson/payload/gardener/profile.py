@@ -25,6 +25,7 @@ _STRING_KEYS = {
     "STUB_DEFAULT": "",
     "INDEX_FILE": "",
     "INDEXED_STUB_KIND": "",
+    "GRAND_INDEX": "",
 }
 _LIST_KEYS = {
     # colon-separated (paths can contain spaces and commas)

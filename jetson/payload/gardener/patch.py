@@ -389,22 +389,17 @@ class Patch(object):
         return changed
 
     def _index_category(self):
-        """Mechanical side-effect: new stubs of the profile's indexed kind
-        get listed in INDEX_FILE (never done by the model)."""
+        """Mechanical side-effect: new stubs of the profile's indexed kind get
+        a '- [[Page]] — ...' bullet in their dimension's INDEX_FILE (never
+        written by the model). Keeps the index-mirror lint invariant green."""
         index = self.vault.resolve(self.vault.profile.index_file)
         if not index or not os.path.isfile(index):
             return []
         text = self.vault.read(index)
-        entry = "- [[%s]]" % self.target
-        if entry in text:
+        if ("[[%s]]" % self.target) in text:
             return []
-        if "- (none yet)" in text:
-            new = text.replace("- (none yet)", entry, 1)
-        elif "## Categories" in text:
-            new = text.replace("## Categories\n", "## Categories\n\n%s" % entry, 1)
-            new = new.replace("\n\n\n", "\n\n")
-        else:
-            new = text.rstrip("\n") + "\n\n## Categories\n\n%s\n" % entry
+        entry = "- [[%s]] — (stub — pattern pending)" % self.target
+        new = text.rstrip("\n") + "\n" + entry + "\n"
         with open(index, "w", encoding="utf-8") as fh:
             fh.write(new)
         return [self.vault.relpath(index)]

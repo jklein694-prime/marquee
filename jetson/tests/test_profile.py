@@ -66,18 +66,24 @@ def test_shipped_marquee_profile_matches_current_behavior():
         from gardener.config import parse_conf
 
         p = Profile(parse_conf(fh.read()))
-    assert p.page_dirs == ["wiki/movies", "wiki/movies/genres"]
+    dims = ["genres", "people", "themes", "style", "platforms", "eras", "settings"]
+    assert p.page_dirs == (
+        ["wiki/movies"]
+        + ["wiki/movies/%s" % d for d in dims]
+        + ["wiki/movies/taste"]
+    )
     assert p.hub == "wiki/entities/Movies.md"
-    assert p.pageless_sections == ["watchlist"]
+    assert p.pageless_sections == ["watchlist", "not interested"]
     assert p.linked_bullet_sections == ["taste"]
     assert p.frontmatter_link_keys == ["genres"]
     assert p.log_file == "wiki/log.md"
     assert p.audits_dir == "wiki/audits"
     assert set(p.stub_kinds) == {"movies", "genres"}
     assert p.stub_default == "movies"
-    assert p.index_file == "wiki/movies/_index.md"
+    assert p.index_file == "wiki/movies/genres/_index.md"
     assert p.indexed_stub_kind == "genres"
-    assert p.category_dirs == ["wiki/movies/genres"]
+    assert p.grand_index == "wiki/movies/_index.md"
+    assert p.category_dirs == ["wiki/movies/%s" % d for d in dims]
     assert not p.generic
 
 
