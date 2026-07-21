@@ -33,7 +33,8 @@ case "$DISK" in
 esac
 
 INFO="$(diskutil info "/dev/$DISK")" || { echo "diskutil can't find /dev/$DISK — is the card inserted?" >&2; exit 1; }
-get() { printf '%s\n' "$INFO" | sed -n "s/^ *$1: *//p" | head -1; }
+# '|' delimiter: field names like "Device / Media Name" contain slashes
+get() { printf '%s\n' "$INFO" | sed -n "s|^ *$1: *||p" | head -1; }
 NAME="$(get 'Device / Media Name')"
 SIZE="$(get 'Disk Size')"
 INTERNAL="$(get 'Internal')"
