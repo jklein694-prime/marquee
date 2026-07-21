@@ -1,0 +1,1 @@
+/Users/joesandra/.claude/plugins/marketplaces/AgriciDaniel-claude-obsidian/commands/wiki.md

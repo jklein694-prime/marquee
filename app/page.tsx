@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import ChatPane, { ChatSend, TraceEntry } from "@/components/ChatPane";
 import GraphView from "@/components/GraphView";
 import Watchlist from "@/components/Watchlist";
+import QuickRate from "@/components/QuickRate";
+import HelpPanel from "@/components/HelpPanel";
 
 const KIND_STYLE: Record<TraceEntry["kind"], string> = {
   init: "text-muted",
@@ -45,12 +47,14 @@ function Booth({ entries }: { entries: TraceEntry[] }) {
   );
 }
 
-type Panel = "graph" | "watchlist" | "booth" | null;
+type Panel = "graph" | "watchlist" | "rate" | "booth" | "help" | null;
 
 const TABS = [
   ["graph", "Taste Graph"],
   ["watchlist", "Watchlist"],
+  ["rate", "Quick Rate"],
   ["booth", "Projection Booth"],
+  ["help", "Help"],
 ] as const;
 
 export default function Home() {
@@ -90,6 +94,7 @@ export default function Home() {
         <ChatPane
           onTurnEnd={() => setGraphVersion((v) => v + 1)}
           onTrace={(t) => setTrace((prev) => [...prev, t])}
+          onOpenHelp={() => setPanel("help")}
           sendRef={chatSend}
         />
       </section>
@@ -133,8 +138,12 @@ export default function Home() {
             ) : panel === "watchlist" ? (
               <Watchlist
                 version={graphVersion}
-                onChat={(t, onDone) => chatSend.current(t, onDone)}
+                onChat={(t, onDone, opts) => chatSend.current(t, onDone, opts)}
               />
+            ) : panel === "rate" ? (
+              <QuickRate onChat={(t, onDone, opts) => chatSend.current(t, onDone, opts)} />
+            ) : panel === "help" ? (
+              <HelpPanel />
             ) : (
               <Booth entries={trace} />
             )}

@@ -19,6 +19,7 @@ export interface RecsData {
     title: string;
     year: number;
     why: string;
+    predicted?: string; // Louie's projected score, e.g. "8-9"; optional only for pre-schema legacy cards
     genres?: string[];
     streaming?: string;
     poster_path?: string;
@@ -64,21 +65,20 @@ export function OptionPicker({
     <div className={`rounded-lg border border-card-border bg-card p-4 ${answered ? "opacity-60" : ""}`}>
       <div className="mb-1 text-sm font-medium text-glow">{data.title}</div>
       {data.context && <div className="mb-2 text-xs text-muted">{data.context}</div>}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-2">
         {data.options.map((o) => (
           <button
             key={o.id}
             disabled={inert}
             onClick={() => toggle(o.label)}
-            className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
+            className={`w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors ${
               picked.has(o.label)
                 ? "border-glow bg-glow/20 text-glow"
                 : "border-card-border bg-transparent text-foreground"
             } ${locked && !answered ? "cursor-wait opacity-50" : answered ? "cursor-default" : "cursor-pointer hover:border-glow/60"}`}
-            title={o.sublabel}
           >
-            {o.label}
-            {o.sublabel && <span className="ml-1.5 text-xs text-muted">{o.sublabel}</span>}
+            <div className="font-medium">{o.label}</div>
+            {o.sublabel && <div className="mt-1 text-xs text-muted">{o.sublabel}</div>}
           </button>
         ))}
       </div>
@@ -224,15 +224,11 @@ export function MovieChecklist({
   );
 }
 
-export function MovieCards({
-  data,
-  locked = false,
-  onAction,
-}: {
-  data: RecsData;
-  locked?: boolean;
-  onAction: (text: string) => void;
-}) {
+export function MovieCards({ data }: { data: RecsData }) {
+  // adding to the watchlist is a pure app action: it writes the personal list
+  // via the API and deliberately does NOT touch the chat or the taste graph —
+  // queueing something you're merely curious about is not a taste signal
+  const [added, setAdded] = useState<Set<string>>(new Set());
   return (
     <div className="flex gap-3 overflow-x-auto pb-2">
       {data.movies.map((m) => (
@@ -267,8 +263,9 @@ export function MovieCards({
             )}
             <button
               onClick={() => {
-                // straight to the personal list; the agent still logs categories
-                void fetch("/api/watchlist", {
+                const key = `${m.title}-${m.year}`;
+                setAdded((a) => new Set(a).add(key));
+                fetch("/api/watchlist", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
@@ -276,14 +273,20 @@ export function MovieCards({
                     title: m.title,
                     year: m.year,
                     note: m.why,
+                    predicted: m.predicted,
                   }),
-                });
-                onAction(`Add ${m.title} (${m.year}) to my watchlist`);
+                })
+                  .then((r) => {
+                    // e.g. a stale tab whose card predates a required field — don't
+                    // claim success when the write was rejected
+                    if (!r.ok) setAdded((a) => { const n = new Set(a); n.delete(key); return n; });
+                  })
+                  .catch(() => setAdded((a) => { const n = new Set(a); n.delete(key); return n; }));
               }}
-              disabled={locked}
-              className="mt-2 w-full rounded-md border border-glow/50 py-1 text-xs text-glow hover:bg-glow/10 disabled:cursor-wait disabled:opacity-40"
+              disabled={added.has(`${m.title}-${m.year}`)}
+              className="mt-2 w-full rounded-md border border-glow/50 py-1 text-xs text-glow hover:bg-glow/10 disabled:opacity-60"
             >
-              + Watchlist
+              {added.has(`${m.title}-${m.year}`) ? "✓ on your watchlist" : "+ Watchlist"}
             </button>
           </div>
         </div>

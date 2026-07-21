@@ -1,0 +1,328 @@
+We can walk through this one more time too. Jail so we're good.
+Okay. Yeah, I think, let me just close out.
+I can go through this really quickly now that we're recording.
+Yeah, just like go through your class book so you can have it.
+Mm-hmm.
+You have to stop sharing just so you know.
+Oh, sorry.
+That's going to be a bummer for your recording, so.
+Yeah, that I hit fair screen.
+All right. One more time. Here we go.
+Sorry. Yeah, you're fine.
+Okay. Pull this up.
+Head over to opportunity. Yeah.
+Some of this information gets populated.
+So on this rest is over time. Got notes on that.
+Then what goes over to Ryan's team are the things down here.
+Yeah. Yeah. So.
+And then if you click tab over to where it says substop,
+like, uh, yeah.
+Then you'll see like where it has like names and info,
+statuses next to it.
+Jail that stuff that's actually been completed.
+Uh, okay.
+So you can click that one like.
+That's where you're like they don't use all the steps.
+They map to different stuff they want.
+Um, but like this lower section where it's like client is looking
+for simple budgetary numbers, new softball field,
+notes, plans like whatever.
+And this will say kind of worry stored stuff.
+What they're looking for.
+And that's like then Ryan routes this to an estimator.
+Like after the sales guy puts this in.
+So you would take this information pretty much
+to try and like populate your templates essentially.
+That I think is the goal.
+And then there's also like, so if you kind of accidentive here,
+um, and accidentive this guy to wait.
+One question quick.
+Are all of these different quotes that you'd have to
+populate?
+Um, they're like different things they're asking for basically.
+Like they mostly use a couple of these.
+But yeah, uh, yeah, you rank a talk more to everything.
+You see here, Joe, is to be task driven, right?
+So these are just tasks to pretty much ask someone to do something.
+So they might ask us to do a pre-sales console with the client.
+They might ask us to obtain floor plans.
+They might ask us for system engineering.
+No quote, right?
+I mean, 90% of the time at this point, they're asking for that one there.
+9 out of 5 for, I mean, budgetary.
+This is a budgetary.
+Yep.
+Yep.
+And then if you were to go back.
+So say we get through budgetary and he closes this.
+Well, now the opportunity, the whole opportunity itself now is moving towards an executable.
+So if you open that up, you're going to find tasks that are in support of actually
+creating an executable quote that they can move forward with.
+And then revision and verbal and convert.
+So this is what you're looking at here.
+These are all just again, this is just our way of getting people to
+getting people assignments to do something.
+Okay.
+So what I'm trying to track down on this step.
+So trying to like do the workflow here.
+Would any of their comments or anything in here be added or like where would it get past
+to your team where we're trying to like have it build this quote?
+That's exactly where it is in that blank.
+Just open free form comments field.
+And that's all you have to work with.
+I do sometimes the other thing is like they're a little attached documents in here.
+Is the ones if you exit out of this.
+You and like go back to the op itself.
+You'll see it has a document tab and where it's doc user yet.
+And so sometimes this will have like this is where they'll upload floor plans or pictures
+or different stuff that they have.
+Yeah, okay.
+If that makes sense.
+Yeah, so you would look through here too to try and like piece together what's going on.
+Yeah.
+Yeah.
+Perfect world.
+As you saw though, if you like went back to that request of just a written one sentence.
+That's what I'm really trying to like push to have more details in because every time
+something comes in, I get that one sentence request.
+Then I have to start going into all the docs just to figure out really what the hell we're doing.
+Okay.
+And the docs would be in here, right?
+Yep.
+Okay.
+So combination of that, the documents,
+the budgetary, which is right subsets.
+Yeah.
+Yep.
+And here.
+And then this is all you got.
+Yep.
+And then you've got to take this reference the docs to figure out what the price would look like.
+Yep.
+And then like you can see that line above Ryan wrote like he'd assign this to Cavan one of the
+estimators and it's like, hey, and he'll expand and maybe write a sentence or two.
+And then that guy gets a task and he's like work list that is like,
+yep, I'm supposed to go do this quote.
+And he works on it.
+Okay, awesome.
+This is a great start and then kind of a perfect segue into kind of what I want to you.
+I don't know if you guys have more than this, but this is like something tangible.
+And I don't know if there's like more things you want to walk me through.
+Like are these documents relevant?
+No, there's usually nothing there.
+That was kind of like the overview is like we pulled out a couple of good
+ops that then like turn into full quotes.
+So you kind of have like a scope there of the flow that it works through.
+Because like if you go back to the quote itself, you can kind of see like the end product of this.
+I'm getting out of this funnel where there's a bunch of tabs.
+Um, and then we can go find that we're in the opportunity now, which is fun.
+Yeah, just on the quotes tab, you want to quote like one tab over there.
+And then you can click the little quote number it'll take you.
+And then you can kind of you can look at like the on the quote itself.
+Obviously, there's a lot more information.
+The line items tab has all the lines for that quote.
+And then the SOW tab like is your statement of work,
+which is like also across the top.
+And you can expand out these like things if you want to.
+But yeah, and now that all of this is generated pretty much in post,
+that's like get that one line.
+Yeah, that's what the Ryan team does with that one line.
+It's trying to do this.
+Oh, man, that sucks.
+Oh, I'm so like it's kind of relieving Joe Tonsi.
+Get someone like a glimpse into this problem.
+Because like, man, I keep trying to echo it.
+You know, again, when we were talking initially, right?
+Like it just goes back to the we spend so much time trying to figure out what we're
+getting asked to do than we are spaying time doing it.
+Right.
+This seems like it a massive amount of pain this could take all day.
+And then tracking them down.
+Yep.
+Okay.
+I think that's kind of why Ryan picked here to start as like a pain point because it's so
+there's so much back and forth.
+And like we tried to do like pull together a couple of examples, but it was like too chaotic
+of data to be able to be like because it's sometimes like it's team's messages and phone calls
+and texts and like going down and finding someone in the office and like to track all of the
+info that you need here.
+So that's sort of why we were like, okay.
+I think this is the best data set we can really give you.
+Yeah.
+Okay.
+This is perfect.
+And a pretty good segue into what I think I would need to do and like would need help with.
+Yep.
+So let's say I'm that person Ryan that you assigned it to.
+So I go back to the opportunity.
+I go into budgetary.
+And I go to where there's some steps and go to this.
+So now I have this information and you tell me, all right, Joe, you're a new hire here.
+Here's your information.
+Here are some of the documents that they have attached.
+Yep.
+Now go out and populate that template that you know I've provided.
+Like go figure out how much of each one of these things that they would need.
+What I would need is kind of like a S.O.P.
+or just like a pretty high level walkthrough as if you're like kind of talking to somebody
+who wouldn't know how to do this.
+So like because I got to figure out how I take this and that information
+and get it to happen automatically.
+Yep.
+I'll get you a novel.
+Okay.
+It's yeah, I'm getting I'll make it shorter, but I think yeah, I definitely will summarize it
+and kind of maybe in that S.O.P.
+Just call out for you kind of areas information because that's part of it too, right?
+There's information key 360.
+There's information in our internal documents, which are living key 360.
+So I can point you to all that stuff.
+Okay.
+Yeah, perfect.
+I mean, I don't want to take up too much of your time.
+If we want to start small and go to do like certain sections of it, I wish I
+I think I might.
+So I've got so many tabs open because I was working on something else and
+you can get a look at the kind of like what this stuff kind of looks like in the back end, but
+I had it somewhere, but the document itself
+Yeah, like I think that's kind of a starting point.
+Joe, honestly, for this is like
+prompting back through of like these open text fields and these guys dumping emails and like
+PDFs into
+but that we could build out and then it would prompt them to be like, here's more questions.
+Like that would be a lift that I think would start and help the team, right, Ryan?
+Yeah, I mean, this one for perfect example here, as you can see, like nothing even calls out.
+Now I dare and know as I know this client, but there's nothing even saying that we are to do the
+cabling and that's a very basic level thing, but it's those are the types of things that I'm
+trying to at least flush out where it's kind of taken for granted, but as we scale,
+not everyone's going to know each client intimately, right, to know those things.
+Yeah, that makes a lot of sense and I would like to make it even like
+so we make it easier for both people to because I feel like the sales guys are never really going to
+listen totally. So if they just want to like upload, it's like a conversation that they had,
+a voice note or something, they're in the car back and they can just chat to it.
+We plug in that information as well and they, I don't know if they could upload a voice memo or
+how they want to do that, but it's just an idea to this information. We could continue to pull it
+and then what I'm thinking is we'll do our best to figure out how to map it to be like they said
+this. Well, now I don't think we'd ever be able to figure out that it's a cabling solution,
+unless we were able to get the AI to like look through. It's like, all right, this is for
+you know, this school district to like do we have anything else open, but I want to get there
+later. I think to kind of just crawl, you know, I feel like we're almost getting to walking.
+No, I'm with you. Like I don't need a nitty-gritty. It's more of like yet cable included, yes or no.
+And like I think some of that like, because really like one of the pain points we've tried to
+solve time and time again and like part of why Ryan originally made those forms was like
+if we like have all this data that like saves us a bunch of steps, so honestly something
+the guys can interact, like the sales guys can interact with and like because they also get
+fatigued by being like, come on man, I'm like, I don't know, Sean just knows how to do this job.
+Like they like kind of do this thing that we'll get occasionally, or if it's easier for them and
+they can just be like, here's all the emails I have from the client asking for this, here's my three
+sentences, and then they're like prompted with a couple questions, that would be great. Yeah, yeah,
+we can do all of that. And I think as we kind of get through a few of these, you know, first hurdles and
+kind of seem what things look like, we can really try and expand out how this thing is going to
+exist and live. And then just like talking about integrating it into the system, like kind of
+future steps, Joe, like the version we're in right now does not have a ton of like open source
+API, but the next version does. So we're able to create pretty easy like API or webhook items
+that tie to the system directly. So that'll be something that like I think will also give us some
+good. Yeah, that'll be sweet, but definitely down the road a little bit. I'm just going to be like
+taking these examples and, you know, creating like folders and documents and stuff to do it. I
+noticed this never loaded, but I'm sure it's a little thing. Oh, the docs might be the docs
+in this setup. Oh, no, depressed. I'll send you the docs for these quotes. Okay, what happened?
+There, I think I have a SharePoint integration that works here. This is the one of the fake environments.
+So the all the cloud storage permissions are turned off in it. So people don't accidentally put garbage
+in the SharePoint. Basically, I just like, so the system runs faster, you know, that's the
+intention is nothing's like actually stored, not as much stuff is stored in this equal server that
+way. But in the sandbox environment, it's off. And I forgot that that means you can't get stuff either.
+Yeah, I mean, that's fine. The other thing you mentioned, Ryan, was that there are some like
+standard based documents that they use. Do those exist in here or yeah, they'll probably also be
+broken though. Well, they sure do. There's, they will be broken, but at least I can point you to
+some areas of info, Joe is where you're going. You were on the right time, Joe. Oh, that's not
+where I was going, Kate. Oh, okay. What are you doing, buddy? So could you, if you go back to the
+opportunity, when do you have open there? Not this one. Yep, you can use that. That's right. Oh,
+good. Yeah, which this one or this one? The main one opportunity 685 behind there.
+So on this two, if you click on company, this one, okay, up one. Yep, click on that.
+I'm just going to use that to point. That's right. My system settings.
+Oh, if it's a hassle, Joe, you can deny me. Should we get now? So if you go to products,
+early products, there's products. So this is going to be a list of products we've put it
+that we've sold and installed for these for this client. So this is a place too that we use as a
+quick push base to understand, okay, what kind of camera manufacturer they are using typically,
+what type of models. Okay, so this is stuff that the art already have gotten through you. Yep,
+and you can see the install date and all that stuff too. Okay, and then how would this information
+kind of come up? I could use it as like, hey, they're mentioning ports so far. They've used these
+or something like that. Yeah, I would say the biggest thing on this one, Joe, is probably going
+to be cameras. Everything else is kind of run rate stuff that you'll just, you'll find on
+every project. Okay. The thing that always gets us is we always like to make sure we keep
+consistent with camera manufacturers. Okay, and I just realized I don't think
+manufacturer is a column option in this window. Yeah, I was just seeing that. I mean, I could
+eventually build out like something that takes this like, I don't know, no, no, that wouldn't help.
+We got our part numbers, but I mean,
+massive numbers, what part numbers are called. Okay, so I could potentially use that to
+tighten, but yeah, I could also just look, do they usually say like something about a camera?
+Yeah, there's none here. Here we got cameras. So again, I just know the part numbers, but you have
+body-worn cameras down below there. You got five megapixel camera down there. Okay, so they say
+stuff that's, yeah, but I could tell that it's a camera. Yeah, okay, cool. So where's the other
+one? That's a camera. It's actually an intercom. Okay, but intercoms too are those, yeah, those
+in cameras. We usually, for intercoms, they usually follow suit by the camera. So, okay, and this is,
+okay, I'll have to think through this one a little bit because it's going to be hard to
+map all of that, but I'll be able to get some of that information. Apologies, I was on mute
+talking to you. That is a field you can add to the grid view. I can just customize that grid.
+Oh, is it? Yeah, fun. I get that too. Yeah, I'll just like, I'll customize the whole grid,
+Goober. That would be amazing. Yeah, I didn't know you wanted it.
+All right, well, that itself is a successful meeting.
+I've got it to do for it all. Play around with the grid settings.
+But yeah, I think that's enough to start, Joe. I know it was like a million things, but
+yes, thank God for the recording. But yeah, it really, I think that is enough to start.
+If there's any other based document, like a living,
+word document, just like potential things, otherwise we might just kind of need. And like,
+what me jump back to, okay, what you put together. Yeah.
+This is really helpful. And kind of just like, how we can just determine, like quickly,
+it's like, all right, this is tied to this and this makes sense.
+Example phrases were also helpful. I don't think we need stuff like this
+because of just kind of the way that we're going to be approaching it. It's not going to be too much.
+So appreciate it. But like, don't want to make you do any additional work.
+I think like the next step of kind of like what we need. And maybe if there's like more to this,
+that we're kind of missing, but this is still pretty good to at least get us started.
+Where is it? I don't know if you'll do the tips. Yeah, okay. Yeah, that's all good.
+It's kind of just like the instructions of like what I was talking about before. I have all
+this information. How do I go do it? Like what I'm going to go here, pull this information.
+I know that. Like now I need to go look at this PDF. Like what am I looking for in that PDF?
+And what does it kind of align to? Like, think of it as you're writing like a description for
+a new employee and trying to walk them through how you do it.
+That makes sense. Like you just want more unlike an extended version of it, right?
+Like on first specific PDF fields. Yeah, I mean, it would be helpful to like, yeah,
+like to be able to route. But if you say like, you know, this is, you know, if you say in the right
+up, like it's for a general system in cameras, like that's all I would need to know. But like,
+how to take that little bit of information to get enough to even start to do some of this?
+I know that's like, it sounds like kind of a difficult ask, but it's truly what is going to be
+the most important thing here is like, and like we can start with just like a subset too and do it
+piece by piece. You know, if you we want to start with just one of these things like,
+yeah, I think that would be definitely helpful because that's how we always approach it from
+R&2 Joe is like, okay, what's the general? What's the general system information? And then we
+start focusing just on cameras and video surveillance, and then we'll jump to access control,
+and then jump to intrusion. Okay, so should we start with cameras and integration then?
+I'll even go with just cameras. Okay, because I think integrations, yeah, we'll get a little bit,
+we'll get pretty lost quickly. So I think let's start with cameras because I think that's
+going to give us probably our best foundation. All right, perfect. Like where we're headed then,
+like got some actionable stuff. And then I think we have a meeting in a few weeks, I don't know,
+I can't remember, but I will start getting started on this and kind of like thinking through and
+creating like an initial build. Well, not sure how much I can promise and when it's all going to
+be kind of dependent on some information, but yeah, this will be like a good start. And then
+I might as I go, just kind of like generate a list of like questions to be like, okay, I see this,
+I see this, like how would I link this to that as I'm building this out? Basically trying to give
+me as much up to speed as I can, because like if I don't have an idea of how to do this on my own,
+oh, to some extent, it's going to be difficult to have AI just inherently understand it. It will
+know more than I do in a lot of things, but a general workflow is going to be helpful. So,
+perfect. Let me tell you a short, it's all yourself short, Joe. You can come, come join
+estimation, man, by the end of this. Yeah, I mean, it's really tough. No, I mean, it's hard.
+Nobody can beat me in terms of knowledge. I know. I know.
+Well, cool. Well, where are you guys traveling to?
+I'm off to Atlanta for conference. And I mean, our, we just bought a company in Michigan back in
+September. So I'm out there. All right. Fine. Well, it looks like you guys are going all over.
+Very cool. Yeah. Well, have fun. Thanks. Get out of the snow. I'm sure
+if we talk to your folks, we got crushed again. Oh, really? Yeah.
+Yeah. Did you? My dad's like new house. They forgot to put in some of the insulation.
+And he pipes burst. And he calls it, he's like living in tent city because everything's just
+covered in plastic. I did hear that when he stopped in there a day. Yeah. They had built it for
+a year, lived there for like six months and then boom. Oh, that's, that's terrible. Yeah.
+Anyways, we're over time. Don't want to take too much of your time. But I really appreciate
+this. Thanks for the help. And I'm excited to kind of get plugging away on some actual AI work.
+Yeah. Yeah. Awesome. We really appreciate the time, Joe. We're excited to work with you on it.
+Cool. Thanks, guys. Bye. See you.

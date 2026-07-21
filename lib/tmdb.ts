@@ -1,3 +1,5 @@
+import { canonicalServices } from "./services";
+
 const BASE = "https://api.themoviedb.org/3";
 const KEY = process.env.TMDB_API_KEY;
 
@@ -62,6 +64,7 @@ export async function details(id: number, media: Media = "movie") {
   const trailerKey = (yt.find((v) => v.type === "Trailer") ?? yt[0])?.key;
   return {
     ...trim(d, media),
+    overview: d.overview ?? "", // full-length; trim()'s copy is clipped to 200 chars for list views
     runtime: d.runtime ?? d.episode_run_time?.[0],
     seasons: d.number_of_seasons,
     genres: (d.genres ?? []).map((g: { name: string }) => g.name),
@@ -69,7 +72,7 @@ export async function details(id: number, media: Media = "movie") {
       media === "tv"
         ? (d.created_by ?? []).map((c: { name: string }) => c.name).join(", ") || undefined
         : d.credits?.crew?.find((c: { job: string }) => c.job === "Director")?.name,
-    streaming: (providers?.flatrate ?? []).map((p: { provider_name: string }) => p.provider_name),
+    streaming: canonicalServices((providers?.flatrate ?? []).map((p: { provider_name: string }) => p.provider_name)),
     trailer: trailerKey ? `https://www.youtube.com/watch?v=${trailerKey}` : undefined,
   };
 }

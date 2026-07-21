@@ -55,6 +55,14 @@ command -v npm >/dev/null 2>&1 && ok "npm $(npm -v)" || { err "npm not found (co
 command -v git >/dev/null 2>&1 && ok "git $(git --version | awk '{print $3}')" || warn "git not found — only needed if you plan to push to GitHub"
 if [ "$missing" -eq 1 ]; then err "Install the missing tools above, then re-run ./install.sh"; exit 1; fi
 
+# Windows note: you're only here because you're running this from Git Bash
+# (or WSL) — cmd.exe/PowerShell can't run a .sh file directly. That's expected;
+# `npm run dev` afterward works fine from any shell, Git Bash included.
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*) ON_WINDOWS=1 ;;
+  *) ON_WINDOWS=0 ;;
+esac
+
 # --- 2. dependencies ----------------------------------------------------------
 step "Installing dependencies (npm install)"
 ( cd "$SCRIPT_DIR" && npm install )
@@ -125,7 +133,11 @@ fi
 
 # --- 8. optional: connect Claude Desktop --------------------------------------
 step "Connect Claude Desktop (optional)"
-cfg_dir="$HOME/Library/Application Support/Claude"
+if [ "$ON_WINDOWS" -eq 1 ]; then
+  cfg_dir="${APPDATA:-$HOME/AppData/Roaming}/Claude"
+else
+  cfg_dir="$HOME/Library/Application Support/Claude"
+fi
 if [ -d "$cfg_dir" ]; then
   say "${DIM}This points Claude Desktop at your wiki via the filesystem MCP server, so you can${RST}"
   say "${DIM}chat with your movie expert there against the same database the app visualizes.${RST}"

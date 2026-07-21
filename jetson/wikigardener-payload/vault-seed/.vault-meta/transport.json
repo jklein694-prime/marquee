@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "detected_at": "2026-06-28T22:04:40Z",
+  "host": "Joes-MacBook-Pro.local",
+  "vault_root": "/Users/joesandra/Documents/claude-obsidian",
+  "manual_override": false,
+  "preferred": "filesystem",
+  "fallback_chain": ["filesystem"],
+  "available": {
+    "cli": {
+      "present": false,
+      "binary": "",
+      "version_string": "",
+      "obsidian_app_running": true
+    },
+    "filesystem": {
+      "present": true,
+      "vault_root": "/Users/joesandra/Documents/claude-obsidian",
+      "note": "ultimate fallback; uses Claude's Read/Write/Edit tools directly"
+    },
+    "mcp_obsidian": {
+      "present": null,
+      "detection": "deferred",
+      "note": "v1.7 does not auto-detect MCP servers. Configure manually per wiki/references/mcp-setup.md and edit this file by hand if needed."
+    },
+    "mcpvault": {
+      "present": null,
+      "detection": "deferred",
+      "note": "v1.7 does not auto-detect MCP servers. Configure manually per wiki/references/mcp-setup.md and edit this file by hand if needed."
+    }
+  }
+}
