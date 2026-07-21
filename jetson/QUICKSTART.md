@@ -38,12 +38,36 @@ Produces `wikigardener-payload/` (~1.5 GB: the model + llama.cpp source + code).
 **Leave it on your Mac** — it goes to the Nano in step 5, not onto the card.
 
 ## 3. Flash JetPack to the microSD
-Download **"Jetson Nano Developer Kit SD Card Image" (JetPack 4.6.x)** from
-[developer.nvidia.com/embedded/jetpack](https://developer.nvidia.com/embedded/jetpack)
-(free login, ~6 GB zip). In **Etcher**: **Flash from file** → the `.zip` →
-**Select target** → pick the microSD (⚠️ **check the size so you don't wipe your
-Mac's disk**) → **Flash**. ~20–30 min. (It writes ~14 GB; the Nano grows it to
-fill the 256 GB on first boot.)
+
+**Get the right image.** The original Nano tops out at **JetPack 4.6.x** — do
+**not** download JetPack 5 or 6 (those are Orin-only and won't boot). Free
+NVIDIA login required; the download is a ~6 GB `.zip` — **don't unzip it**.
+
+- **4GB devkit** (round barrel-jack power port, 4× USB-A, HDMI **and**
+  DisplayPort; board rev A02/B01 both fine):
+  [Get Started — Jetson Nano Developer Kit](https://developer.nvidia.com/embedded/learn/get-started-jetson-nano-devkit)
+  → "Download the Jetson Nano Developer Kit SD Card Image".
+- **2GB devkit** (USB-C power only, fewer USB ports, HDMI only, "2GB" printed
+  on the board):
+  [Get Started — Jetson Nano 2GB](https://developer.nvidia.com/embedded/learn/get-started-jetson-nano-2gb-devkit).
+- Backups if those redirect: [JetPack 4.6 page](https://developer.nvidia.com/embedded/jetpack-sdk-46)
+  · [Jetson Download Center](https://developer.nvidia.com/embedded/downloads).
+
+**Flash it — either way works** (~15–25 min; it writes ~14 GB and the Nano
+grows it to fill the 256 GB on first boot):
+
+- **Etcher**: **Flash from file** → the `.zip` → **Select target** → the
+  microSD (⚠️ **check the size so you don't wipe your Mac's disk**) → **Flash**.
+- **Or the bundled one-command flasher** (macOS, guardrailed — refuses internal
+  disks and makes you type the disk id back):
+  ```bash
+  diskutil list external            # find the card, e.g. /dev/disk4
+  bash jetson/laptop/flash-sd.sh ~/Downloads/jetson-nano-sd-card-image.zip disk4
+  ```
+
+When macOS afterwards says **"The disk you inserted was not readable"** —
+that's *expected* (the card is now Linux-formatted). Click **Eject**, never
+Initialize.
 
 ## 4. First boot, no keyboard — over the USB serial console
 1. Insert the microSD and the WiFi dongle into the Nano.
