@@ -17,6 +17,7 @@ shellcheck -x -e SC1091 \
   "$JETSON"/payload/setup-wizard.sh \
   "$JETSON"/payload/wikigardener \
   "$JETSON"/payload/audit/audit.sh \
+  "$JETSON"/payload/app/install-app.sh \
   "$JETSON"/laptop/*.sh \
   "$JETSON"/image/build-image.sh \
   "$JETSON"/image/headless-preseed.sh \

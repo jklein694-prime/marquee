@@ -25,10 +25,13 @@ for path in \
   gardener/__main__.py gardener/daemon.py gardener/patch.py \
   gardener/profile.py gardener/prompts/system.txt \
   gardener/models.py gardener/sync.py gardener/webui.py gardener/net.py \
-  gardener/jobs.py gardener/lock.py \
+  gardener/jobs.py gardener/lock.py gardener/notify.py gardener/suggest.py \
+  gardener/prompts/suggest.txt app/install-app.sh \
   models.catalog \
   systemd/wikigardener-web.service systemd/wikigardener-sync.service \
-  systemd/wikigardener-sync.timer \
+  systemd/wikigardener-sync.timer systemd/wikigardener-suggest.service \
+  systemd/wikigardener-suggest.timer systemd/wikigardener-notify.service \
+  systemd/wikigardener-notify.timer \
   profiles/marquee-movies.conf profiles/generic.conf \
   audit/audit.sh audit/audit.py audit/audit-system.txt \
   "models/$MODEL_1_5B_FILE" "models/$MODEL_0_5B_FILE" \

@@ -25,7 +25,7 @@ OUT="wikigardener-jetson.img"
 VAULT="$JETSON/vault-template"
 COMPRESS=0
 WIFI_SSID="" WIFI_PASS="" WIFI_COUNTRY="US" HOSTNAME_="wikigardener"
-SSH_PASS="" SSH_KEY="" USER_NAME="gardener"
+SSH_PASS="" SSH_KEY="" USER_NAME="gardener" ANTHROPIC_KEY="" NTFY_TOPIC=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --out) OUT="$2"; shift 2 ;;
@@ -38,6 +38,8 @@ while [ $# -gt 0 ]; do
     --ssh-pass) SSH_PASS="$2"; shift 2 ;;
     --ssh-key) SSH_KEY="$2"; shift 2 ;;
     --user) USER_NAME="$2"; shift 2 ;;
+    --anthropic-key) ANTHROPIC_KEY="$2"; shift 2 ;;
+    --ntfy-topic) NTFY_TOPIC="$2"; shift 2 ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
   esac
 done
@@ -136,6 +138,8 @@ PRESEED_ARGS=(--hostname "$HOSTNAME_" --user "$USER_NAME" --wifi-country "$WIFI_
 [ -n "$WIFI_SSID" ] && PRESEED_ARGS+=(--wifi-ssid "$WIFI_SSID" --wifi-pass "$WIFI_PASS")
 [ -n "$SSH_PASS" ] && PRESEED_ARGS+=(--ssh-pass "$SSH_PASS")
 [ -n "$SSH_KEY" ] && PRESEED_ARGS+=(--ssh-key "$SSH_KEY")
+[ -n "$ANTHROPIC_KEY" ] && PRESEED_ARGS+=(--anthropic-key "$ANTHROPIC_KEY")
+[ -n "$NTFY_TOPIC" ] && PRESEED_ARGS+=(--ntfy-topic "$NTFY_TOPIC")
 bash "$HERE/headless-preseed.sh" "$MNT" "${PRESEED_ARGS[@]}"
 
 echo "==> preseeding a login user + disabling nv-oem-config"

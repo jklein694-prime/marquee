@@ -21,7 +21,7 @@ shift
 [ -d "$ROOT/etc" ] || { echo "not a rootfs (no $ROOT/etc): $ROOT" >&2; exit 1; }
 
 SSID="" PSK="" COUNTRY="US" HOST="wikigardener" USER_NAME="gardener"
-SSH_PASS="" SSH_KEY=""
+SSH_PASS="" SSH_KEY="" ANTHROPIC_KEY="" NTFY_TOPIC=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --wifi-ssid) SSID="$2"; shift 2 ;;
@@ -31,6 +31,8 @@ while [ $# -gt 0 ]; do
     --user) USER_NAME="$2"; shift 2 ;;
     --ssh-pass) SSH_PASS="$2"; shift 2 ;;
     --ssh-key) SSH_KEY="$2"; shift 2 ;;
+    --anthropic-key) ANTHROPIC_KEY="$2"; shift 2 ;;
+    --ntfy-topic) NTFY_TOPIC="$2"; shift 2 ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
   esac
 done
@@ -122,6 +124,21 @@ if [ -n "$SSH_PASS" ]; then
   mkdir -p "$ROOT/root"
   printf '%s' "$SSH_PASS" > "$ROOT/root/.wg-ssh-pass"
   chmod 600 "$ROOT/root/.wg-ssh-pass"
+fi
+
+# --- Claude credentials + notification topic (baked to YOUR account) ------------
+# The image then contains these in plaintext — do not share the .img.
+if [ -n "$ANTHROPIC_KEY" ]; then
+  say "anthropic api key -> /etc/wikigardener/anthropic.key"
+  mkdir -p "$ROOT/etc/wikigardener"
+  printf '%s\n' "$ANTHROPIC_KEY" > "$ROOT/etc/wikigardener/anthropic.key"
+  chmod 600 "$ROOT/etc/wikigardener/anthropic.key"
+fi
+if [ -n "$NTFY_TOPIC" ]; then
+  say "ntfy topic staged (picked up by install.sh)"
+  mkdir -p "$ROOT/etc/wikigardener"
+  printf 'NTFY_TOPIC=%s\n' "$NTFY_TOPIC" > "$ROOT/etc/wikigardener/preseed.conf"
+  chmod 600 "$ROOT/etc/wikigardener/preseed.conf"
 fi
 
 say "done — WiFi/SSH/hostname baked into $ROOT"

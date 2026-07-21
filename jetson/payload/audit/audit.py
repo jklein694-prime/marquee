@@ -199,6 +199,22 @@ def main(argv=None):
     git.commit_all("audit: sonnet review %s" % today)
     git.tag("audit/%s" % today)
     print("== tagged audit/%s" % today)
+
+    # tell the user's phone — we're online right now, so this delivers instantly
+    from gardener import notify
+
+    verdict = ""
+    for line in reply.split("\n"):
+        if line.strip() and not line.startswith("#"):
+            verdict = line.strip()[:200]
+            break
+    notify.queue_note(
+        cfg,
+        "Wiki audit complete — %d corrections queued" % queued,
+        (verdict + "\n\n" if verdict else "") + "Full review: %s" % vault.relpath(note_path),
+        tags=["mag"],
+    )
+    print("== notify: %s" % json.dumps(notify.flush(cfg)))
     return 0
 
 

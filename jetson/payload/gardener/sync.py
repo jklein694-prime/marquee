@@ -56,6 +56,16 @@ def sync(cfg, today=None, require_online=True):
                 cfg.vault_dir, local_before, remote_sha, out, today
             )
             git.commit_all("sync: conflict marker %s" % today)
+            from . import notify
+
+            notify.queue_note(
+                cfg,
+                "Vault sync conflict",
+                "Rebase aborted safely; both sides intact. See %s in the vault." % rel,
+                tags=["warning"],
+                priority="high",
+            )
+            notify.flush(cfg)  # we're online (sync just ran) — deliver now
             return {
                 "outcome": "conflict",
                 "note": rel,

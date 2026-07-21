@@ -90,6 +90,7 @@ done
 
 rsync -a --delete "$PAYLOAD_DIR/gardener/" "$OPT/gardener/"
 rsync -a "$PAYLOAD_DIR/audit/" "$OPT/audit/"
+rsync -a "$PAYLOAD_DIR/app/" "$OPT/app/"
 cp -n "$PAYLOAD_DIR/config/gardener.conf" "$ETC/gardener.conf"
 cp -n "$PAYLOAD_DIR/models.catalog" "$OPT/models.catalog"
 install -m 755 "$PAYLOAD_DIR/setup-wizard.sh" "$OPT/setup-wizard.sh"
@@ -101,8 +102,21 @@ cat > /etc/profile.d/wikigardener-setup.sh <<'EOF'
 EOF
 
 # --- 2b. connected-appliance plumbing --------------------------------------------
-# background-jobs dir + dashboard token (random if absent, printed once)
-mkdir -p "$VAR/jobs"
+# background-jobs dir + notification queue + dashboard token
+mkdir -p "$VAR/jobs" "$VAR/notify"
+# settings staged by a preseeded image (e.g. NTFY_TOPIC) merge into the conf once
+if [ -f "$ETC/preseed.conf" ]; then
+  while IFS='=' read -r pk pv; do
+    [ -n "$pk" ] || continue
+    if grep -q "^$pk=" "$ETC/gardener.conf"; then
+      sed -i "s|^$pk=.*|$pk=$pv|" "$ETC/gardener.conf"
+    else
+      echo "$pk=$pv" >> "$ETC/gardener.conf"
+    fi
+  done < "$ETC/preseed.conf"
+  rm -f "$ETC/preseed.conf"
+  echo "   merged preseeded settings into gardener.conf"
+fi
 if [ ! -f "$ETC/dashboard.token" ]; then
   head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$ETC/dashboard.token"
   echo >> "$ETC/dashboard.token"
@@ -173,14 +187,18 @@ sed "s/__MEMORY_MAX__/$MEMORY_MAX/" \
 cp "$PAYLOAD_DIR/systemd/gardener.service" /etc/systemd/system/
 sed "s/__INTERVAL_MIN__/${INTERVAL_MIN:-15}/" \
   "$PAYLOAD_DIR/systemd/gardener.timer" > /etc/systemd/system/gardener.timer
-cp "$PAYLOAD_DIR/systemd/wikigardener-web.service" /etc/systemd/system/
-cp "$PAYLOAD_DIR/systemd/wikigardener-sync.service" /etc/systemd/system/
-cp "$PAYLOAD_DIR/systemd/wikigardener-sync.timer" /etc/systemd/system/
+for unit in wikigardener-web.service wikigardener-sync.service \
+            wikigardener-sync.timer wikigardener-suggest.service \
+            wikigardener-suggest.timer wikigardener-notify.service \
+            wikigardener-notify.timer; do
+  cp "$PAYLOAD_DIR/systemd/$unit" /etc/systemd/system/
+done
 systemctl daemon-reload
 systemctl enable --now llama-server.service
 systemctl enable gardener.timer
 systemctl enable --now wikigardener-web.service
-systemctl enable wikigardener-sync.timer
+systemctl enable wikigardener-sync.timer wikigardener-suggest.timer \
+                 wikigardener-notify.timer
 
 # --- 5. self-test ----------------------------------------------------------------
 echo "== self-test"

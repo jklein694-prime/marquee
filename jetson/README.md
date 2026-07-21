@@ -268,6 +268,76 @@ at top priority — `revert` corrections are applied mechanically via git, the
 rest are handed to the local model one at a time. The vault gets an
 `audit/<date>` tag, which becomes the baseline for the next audit.
 
+## It talks to you: suggestions + push notifications
+
+The gardener doesn't just tend — once a day (`wikigardener-suggest.timer`,
+~6pm) the local model reads your taste evidence and proposes **movies, shows,
+and new areas of the wiki to explore**, writes them to
+`<SUGGESTIONS_DIR>/<date>.md` in the vault (committed like everything else),
+and pushes them to your phone.
+
+Delivery is via **[ntfy](https://ntfy.sh)** — install the ntfy app, subscribe
+to a private hard-to-guess topic, and set it in `wikigardener setup` (or
+`NTFY_TOPIC` in gardener.conf). Notifications are **offline-safe**: queued as
+files and flushed the moment the device is online (hourly
+`wikigardener-notify.timer`, or instantly during audits/sync). You also get
+notified on **audit completion** and **sync conflicts**.
+
+```bash
+wikigardener notify test      # send yourself a test push
+wikigardener suggest --force  # run a suggestions pass right now
+```
+
+## Hosting the Marquee app on the Nano (:3000)
+
+The Nano can serve the full web app (graph view, wiki browser, chat) against
+the same vault the gardener tends:
+
+```bash
+# on the Nano, during an online window:
+sudo bash /opt/wikigardener/app/install-app.sh https://github.com/<you>/marquee.git
+# then open http://<nano-ip>:3000
+```
+
+It runs Next.js inside a **Docker Node 20 container** (the Nano's own glibc is
+too old for Node 20 — the container brings its own). The vault mounts
+**read-only** into the app, so the gardener remains the single writer. Honest
+caveats, all printed by the script: the Node-20-container-on-JetPack-4.6
+combination is a hardware-verify item; RAM is tight next to llama-server (the
+app is capped at 700MB — consider the 0.5b model tier when both run; don't run
+both on a 2GB Nano); chat needs an online window, browsing works offline.
+**Fallback:** run the app on your laptop against a git-synced clone of the
+vault.
+
+## Your Claude credentials on the device
+
+Your **Anthropic API key** powers the Sonnet audits, the app's chat, and any
+API-driven review. Provision it any of three ways — it lands at
+`/etc/wikigardener/anthropic.key` (0600):
+
+- `wikigardener setup` (prompts for it), or
+- `echo 'sk-ant-...' | sudo tee /etc/wikigardener/anthropic.key`, or
+- baked into a flashed image: `build-image.sh --anthropic-key sk-ant-... --ntfy-topic <topic>`
+  (⚠️ the `.img` then contains the key in plaintext — never share the image).
+
+Claude Code's own login is **not** baked into the device: it runs on your
+laptop (its own auth) over SSH — see below.
+
+## Keep building with Claude Code (beyond the gardener)
+
+The device is set up so you can keep evolving everything from your laptop:
+
+1. `jetson/laptop/connect.sh <nano-ip>` once → `ssh wikigardener` alias + a
+   tunnel that exposes the Nano's offline model at `localhost:8080`.
+2. **Vault work**: the vault syncs via git (`wikigardener sync`) — run Claude
+   Code against your synced clone on the laptop, push, and the Nano pulls on
+   its next sync. Or SSH in and edit live (the vault lock keeps the gardener
+   out of your way mid-commit).
+3. **Code work**: the app source lives at `/opt/wikigardener/app-src` (a git
+   clone) and the gardener at `/opt/wikigardener` — point Claude Code at your
+   marquee repo on the laptop, push, then re-run `install-app.sh` /
+   `install.sh` from the USB payload to roll the device forward.
+
 ## Nemotron / bigger models (needs an Orin, not the original Nano)
 
 NVIDIA Nemotron is staged in `models.catalog` (`ram_tier = orin`) but **cannot

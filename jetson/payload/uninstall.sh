@@ -7,7 +7,9 @@ set -euo pipefail
 
 for unit in gardener.timer gardener.service llama-server.service \
             wikigardener-web.service wikigardener-sync.timer \
-            wikigardener-sync.service; do
+            wikigardener-sync.service wikigardener-suggest.timer \
+            wikigardener-suggest.service wikigardener-notify.timer \
+            wikigardener-notify.service wikigardener-app.service; do
   systemctl disable --now "$unit" 2>/dev/null || true
   rm -f "/etc/systemd/system/$unit"
 done

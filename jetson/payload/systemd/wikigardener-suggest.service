@@ -1,0 +1,15 @@
+[Unit]
+Description=Daily proactive wiki suggestions (writes a vault note + queues a push)
+After=llama-server.service
+Wants=llama-server.service
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH=/opt/wikigardener
+ExecStart=/usr/bin/python3 -m gardener suggest
+WorkingDirectory=/var/lib/wikigardener/vault
+Nice=15
+TimeoutStartSec=20min
+
+[Install]
+WantedBy=multi-user.target

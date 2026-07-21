@@ -111,6 +111,26 @@ if yes "Set up vault git sync to your computer / GitHub?"; then
   fi
 fi
 
+# --- 3b. Claude credentials + push notifications ---------------------------------
+if yes "Store your Anthropic API key? (powers Sonnet audits, chat, suggestions review)"; then
+  akey="$(ask 'Anthropic API key (sk-ant-...)')"
+  if [ -n "$akey" ]; then
+    printf '%s\n' "$akey" > "$ETC/anthropic.key"
+    chmod 600 "$ETC/anthropic.key"
+    echo "  stored (0600) at $ETC/anthropic.key — used by audit.sh and the app."
+  fi
+fi
+if yes "Set up push notifications to your phone? (suggestions, audits, conflicts)"; then
+  echo "  1. Install the 'ntfy' app (iOS/Android) or open https://ntfy.sh in a browser."
+  echo "  2. Subscribe there to a PRIVATE, hard-to-guess topic name."
+  topic="$(ask 'your ntfy topic (e.g. wikigardener-jk-8f2c)')"
+  if [ -n "$topic" ]; then
+    setconf NTFY_TOPIC "$topic"
+    PYTHONPATH="$OPT" python3 -m gardener notify test || true
+    echo "  a test notification was sent (arrives when online)."
+  fi
+fi
+
 # --- 4. model -------------------------------------------------------------------
 if yes "Pick / download a model now? (needs WiFi)"; then
   PYTHONPATH="$OPT" python3 -m gardener models list || true

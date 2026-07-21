@@ -26,6 +26,7 @@ _STRING_KEYS = {
     "INDEX_FILE": "",
     "INDEXED_STUB_KIND": "",
     "GRAND_INDEX": "",
+    "SUGGESTIONS_DIR": "_suggestions",
 }
 _LIST_KEYS = {
     # colon-separated (paths can contain spaces and commas)

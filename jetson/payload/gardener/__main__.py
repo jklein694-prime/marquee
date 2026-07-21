@@ -35,6 +35,12 @@ def main(argv=None):
     web_p = sub.add_parser("web", help="serve the LAN control dashboard")
     web_p.add_argument("--host")
     web_p.add_argument("--port", type=int)
+    suggest_p = sub.add_parser(
+        "suggest", help="one proactive-suggestions pass (daily by timer)"
+    )
+    suggest_p.add_argument("--force", action="store_true", help="ignore the daily guard")
+    notify_p = sub.add_parser("notify", help="notification queue control")
+    notify_p.add_argument("notify_action", choices=("flush", "test", "status"))
     args = parser.parse_args(argv)
 
     if args.command == "net":
@@ -65,6 +71,27 @@ def main(argv=None):
         from . import webui
 
         webui.serve(cfg, host=args.host, port=args.port)
+        return 0
+
+    if args.command == "suggest":
+        from . import suggest as suggest_mod
+
+        result = suggest_mod.run(cfg, force=args.force)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result.get("outcome") != "error" else 1
+
+    if args.command == "notify":
+        from . import notify as notify_mod
+
+        if args.notify_action == "test":
+            notify_mod.queue_note(
+                cfg, "Wiki gardener", "Test notification — the pipeline works.",
+                tags=["white_check_mark"],
+            )
+        if args.notify_action in ("flush", "test"):
+            print(json.dumps(notify_mod.flush(cfg), indent=2, sort_keys=True))
+        else:
+            print(json.dumps({"pending": notify_mod.pending_count(cfg)}, indent=2))
         return 0
 
     if args.command == "run-once":

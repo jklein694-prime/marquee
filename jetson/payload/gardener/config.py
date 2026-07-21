@@ -30,6 +30,11 @@ DEFAULTS = {
     "JOBS_DIR": "/var/lib/wikigardener/jobs",
     "GIT_REMOTE": "",
     "GIT_BRANCH": "main",
+    # push notifications (ntfy) + proactive suggestions
+    "NTFY_TOPIC": "",
+    "NTFY_SERVER": "https://ntfy.sh",
+    "NOTIFY_DIR": "/var/lib/wikigardener/notify",
+    "SUGGEST_MAX": "4",
 }
 
 _INT_KEYS = (
@@ -40,6 +45,7 @@ _INT_KEYS = (
     "MAX_TOKENS",
     "LLM_TIMEOUT_SEC",
     "DASHBOARD_PORT",
+    "SUGGEST_MAX",
 )
 _FLOAT_KEYS = ("TEMPERATURE",)
 
