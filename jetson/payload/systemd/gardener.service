@@ -1,0 +1,17 @@
+[Unit]
+Description=One wiki gardening task
+After=llama-server.service
+Wants=llama-server.service
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH=/opt/wikigardener
+ExecStart=/usr/bin/python3 -m gardener run-once
+WorkingDirectory=/var/lib/wikigardener/vault
+Nice=15
+CPUQuota=150%
+# CPU inference of one small patch can take many minutes on 4 A57 cores
+TimeoutStartSec=20min
+
+[Install]
+WantedBy=multi-user.target

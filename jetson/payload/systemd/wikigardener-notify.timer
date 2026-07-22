@@ -1,0 +1,11 @@
+[Unit]
+Description=Flush queued push notifications when online
+
+[Timer]
+OnBootSec=20min
+OnUnitInactiveSec=1h
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target

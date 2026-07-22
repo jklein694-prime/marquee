@@ -1,0 +1,13 @@
+Task: adopt an orphan page. "{target}" exists but no other page links to it.
+
+Add ONE inbound link from the most closely related page below: use add_link with "file" = that related page's path, "anchor" = an exact line from it after which a new line mentioning [[{target}]] fits naturally, and "text" = the new single line containing [[{target}]]. On an index or list page, prefer append_bullet with "text" like "- [[{target}]] — <short note>". Use no_change if nothing below is genuinely related.
+
+Orphan page {orphan_file}:
+---
+{page}
+---
+
+Candidate related pages:
+{neighbors}
+
+Existing pages: {pages}

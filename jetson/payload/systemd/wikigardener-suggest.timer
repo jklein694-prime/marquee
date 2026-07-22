@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the daily suggestions pass
+
+[Timer]
+OnCalendar=*-*-* 18:00:00
+RandomizedDelaySec=1800
+Persistent=true
+
+[Install]
+WantedBy=timers.target

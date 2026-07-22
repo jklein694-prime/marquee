@@ -1,0 +1,64 @@
+# models.catalog — the runtime menu of GGUF models the dashboard/CLI can
+# download and switch to. One [entry] block per model; parsed by models.py.
+#
+# ram_tier is the MINIMUM board this model is safe on: a "1.5b" model is
+# refused on a 2GB Nano (detected tier 0.5b) unless you pass --force. Keep the
+# two shipped models in sync with PINS.env (PINS is the build-time source of
+# truth; this file is the on-device menu). You can also download any raw
+# Hugging Face .gguf URL with `gardener models download <url>` without editing
+# this file.
+
+[qwen2.5-1.5b]
+name = Qwen2.5 1.5B Instruct (Q4_K_M)
+file = qwen2.5-1.5b-instruct-q4_k_m.gguf
+url = https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf
+sha256 = TBD
+ram_tier = 1.5b
+ctx = 3072
+
+[qwen2.5-0.5b]
+name = Qwen2.5 0.5B Instruct (Q4_K_M)
+file = qwen2.5-0.5b-instruct-q4_k_m.gguf
+url = https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf
+sha256 = TBD
+ram_tier = 0.5b
+ctx = 3072
+
+[qwen2.5-3b]
+name = Qwen2.5 3B Instruct (Q4_K_M) — needs a 4GB board with light OS load
+file = qwen2.5-3b-instruct-q4_k_m.gguf
+url = https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf
+sha256 = TBD
+ram_tier = 3b
+ctx = 2048
+
+[llama3.2-1b]
+name = Llama 3.2 1B Instruct (Q4_K_M)
+file = llama-3.2-1b-instruct-q4_k_m.gguf
+url = https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf
+sha256 = TBD
+ram_tier = 1.5b
+ctx = 3072
+
+# --- Orin-class only (staged) -----------------------------------------------
+# NVIDIA Nemotron. The smallest is 4B — too big for the original Nano's shared
+# 4GB, AND its architecture needs a 2025-era llama.cpp that will NOT build on
+# JetPack 4.6 / GCC 7 / CUDA 10.2. Tagged ram_tier=orin so it is auto-refused
+# on the original Nano (shows "tier" in the picker). It becomes usable on an
+# Orin Nano (8GB, JetPack 5/6) with a newer LLAMACPP_TAG — see README.
+
+[nemotron-mini-4b]
+name = Nemotron-Mini-4B-Instruct (Q4_K_M) — Orin-class, newer llama.cpp
+file = nemotron-mini-4b-instruct-q4_k_m.gguf
+url = https://huggingface.co/QuantFactory/Nemotron-Mini-4B-Instruct-GGUF/resolve/main/Nemotron-Mini-4B-Instruct.Q4_K_M.gguf
+sha256 = TBD
+ram_tier = orin
+ctx = 2048
+
+[nemotron-3-nano-4b]
+name = NVIDIA-Nemotron-3-Nano-4B (Q4_K_M) — Orin-class, 2025 llama.cpp (hybrid arch)
+file = nvidia-nemotron-3-nano-4b-q4_k_m.gguf
+url = https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-4B-GGUF/resolve/main/NVIDIA-Nemotron-3-Nano-4B-Q4_K_M.gguf
+sha256 = TBD
+ram_tier = orin
+ctx = 2048

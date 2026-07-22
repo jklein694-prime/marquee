@@ -1,0 +1,12 @@
+[Unit]
+Description=Flush queued push notifications (no-op offline)
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH=/opt/wikigardener
+ExecStart=/usr/bin/python3 -m gardener notify flush
+Nice=15
+TimeoutStartSec=5min
+
+[Install]
+WantedBy=multi-user.target
