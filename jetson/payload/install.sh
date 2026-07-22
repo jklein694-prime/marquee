@@ -50,6 +50,34 @@ if [ ! -x "$CPU_BIN" ]; then
   rm -rf "$SRC_DIR"; mkdir -p "$SRC_DIR"
   tar -xzf "$SRC_TARBALL" -C "$SRC_DIR" --strip-components=1
 
+  # GCC 7 (JetPack 4.6's compiler) lacks the NEON x2/x4 load intrinsics that
+  # llama.cpp's aarch64 path uses (vld1q_u8_x2, vld1q_s8_x4, ...). GCC 8.x on
+  # some Jetsons too. Inject equivalent two/four-load shims, guarded so newer
+  # compilers are untouched. Confirmed needed on real Nano hardware.
+  echo "== injecting GCC-7 NEON compatibility shims"
+  cat > "$SRC_DIR/wg-neon-compat.h" <<'EOF'
+#pragma once
+/* wg_gcc7_compat: NEON x2/x4 load intrinsics missing before GCC 9 */
+#if defined(__aarch64__) && defined(__GNUC__) && !defined(__clang__) && __GNUC__ < 9
+#include <arm_neon.h>
+static inline uint8x16x2_t wg_vld1q_u8_x2(const uint8_t *p){uint8x16x2_t r;r.val[0]=vld1q_u8(p);r.val[1]=vld1q_u8(p+16);return r;}
+static inline uint8x16x4_t wg_vld1q_u8_x4(const uint8_t *p){uint8x16x4_t r;r.val[0]=vld1q_u8(p);r.val[1]=vld1q_u8(p+16);r.val[2]=vld1q_u8(p+32);r.val[3]=vld1q_u8(p+48);return r;}
+static inline int8x16x2_t wg_vld1q_s8_x2(const int8_t *p){int8x16x2_t r;r.val[0]=vld1q_s8(p);r.val[1]=vld1q_s8(p+16);return r;}
+static inline int8x16x4_t wg_vld1q_s8_x4(const int8_t *p){int8x16x4_t r;r.val[0]=vld1q_s8(p);r.val[1]=vld1q_s8(p+16);r.val[2]=vld1q_s8(p+32);r.val[3]=vld1q_s8(p+48);return r;}
+static inline int16x8x2_t wg_vld1q_s16_x2(const int16_t *p){int16x8x2_t r;r.val[0]=vld1q_s16(p);r.val[1]=vld1q_s16(p+8);return r;}
+#define vld1q_u8_x2 wg_vld1q_u8_x2
+#define vld1q_u8_x4 wg_vld1q_u8_x4
+#define vld1q_s8_x2 wg_vld1q_s8_x2
+#define vld1q_s8_x4 wg_vld1q_s8_x4
+#define vld1q_s16_x2 wg_vld1q_s16_x2
+#endif
+EOF
+  for src in ggml-quants.c ggml.c ggml-alloc.c; do
+    if [ -f "$SRC_DIR/$src" ] && ! grep -q wg-neon-compat "$SRC_DIR/$src"; then
+      sed -i '1i #include "wg-neon-compat.h"' "$SRC_DIR/$src"
+    fi
+  done
+
   echo "== CPU build (mandatory; ~20-40 min on the Nano, one-time)"
   if ! make -C "$SRC_DIR" -j"$(nproc)" server >"$BUILD_LOG" 2>&1; then
     echo "FATAL: CPU build failed — log: $BUILD_LOG" >&2
