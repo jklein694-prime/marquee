@@ -41,6 +41,9 @@ def main(argv=None):
     suggest_p.add_argument("--force", action="store_true", help="ignore the daily guard")
     notify_p = sub.add_parser("notify", help="notification queue control")
     notify_p.add_argument("notify_action", choices=("flush", "test", "status"))
+    users_p = sub.add_parser("users", help="dashboard profiles (add|list|rm)")
+    users_p.add_argument("users_action", choices=("add", "list", "rm"))
+    users_p.add_argument("username", nargs="?", help="profile name (add/rm)")
     args = parser.parse_args(argv)
 
     if args.command == "net":
@@ -52,6 +55,36 @@ def main(argv=None):
         return 0 if ok else 1
 
     cfg = Config(path=args.conf)
+
+    if args.command == "users":
+        from . import users as users_mod
+
+        if args.users_action == "list":
+            for name in ["admin (shared token)"] + users_mod.list_names(cfg.users_file):
+                print(name)
+            return 0
+        if not args.username:
+            print("error: username required", file=sys.stderr)
+            return 1
+        if args.users_action == "add":
+            import getpass
+
+            pw = getpass.getpass("password for %s: " % args.username)
+            if pw != getpass.getpass("confirm: "):
+                print("error: passwords did not match", file=sys.stderr)
+                return 1
+            try:
+                users_mod.add(cfg.users_file, args.username, pw)
+            except ValueError as exc:
+                print("error: %s" % exc, file=sys.stderr)
+                return 1
+            print("added profile: %s" % args.username)
+            return 0
+        if args.users_action == "rm":
+            ok = users_mod.remove(cfg.users_file, args.username)
+            print("removed" if ok else "no such profile")
+            return 0 if ok else 1
+
     vault = Vault(cfg.vault_dir)
     queue = WorkQueue(cfg.queue_dir)
 

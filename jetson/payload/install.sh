@@ -209,6 +209,9 @@ fi
 
 # --- 4. systemd ------------------------------------------------------------------
 echo "== installing services"
+# stable exec path for the unit; systemd can't expand ${LLAMA_VARIANT} in the
+# command position, so the variant choice lives in this symlink instead
+ln -sf "llama-server-$LLAMA_VARIANT" "$OPT/bin/llama-server"
 INTERVAL_MIN="$(sed -n 's/^INTERVAL_MIN=//p' "$ETC/gardener.conf" | head -1)"
 sed "s/__MEMORY_MAX__/$MEMORY_MAX/" \
   "$PAYLOAD_DIR/systemd/llama-server.service" > /etc/systemd/system/llama-server.service
@@ -230,19 +233,33 @@ systemctl enable wikigardener-sync.timer wikigardener-suggest.timer \
 
 # --- 5. self-test ----------------------------------------------------------------
 echo "== self-test"
+# ponytail: probe with python3 (a hard dep, see preflight) not curl — minimal L4T
+# images ship without curl, and dying here after a 40-min build is a brutal false negative.
+http() {  # http URL [JSON_BODY] -> body on stdout, nonzero on network/HTTP error
+  python3 - "$@" <<'PY'
+import sys, urllib.request
+url, data = sys.argv[1], (sys.argv[2].encode() if len(sys.argv) > 2 else None)
+req = urllib.request.Request(url, data=data,
+        headers={"Content-Type": "application/json"} if data else {})
+try:
+    with urllib.request.urlopen(req, timeout=10) as r:
+        sys.stdout.write(r.read().decode())
+except Exception:
+    sys.exit(1)
+PY
+}
 echo "   waiting for llama-server (model load from SD can take minutes)..."
 for _ in $(seq 1 60); do
-  curl -sf http://127.0.0.1:8080/health >/dev/null 2>&1 && break
+  http http://127.0.0.1:8080/health >/dev/null 2>&1 && break
   sleep 5
 done
-curl -sf http://127.0.0.1:8080/health >/dev/null \
+http http://127.0.0.1:8080/health >/dev/null \
   || { echo "FATAL: llama-server never became healthy — journalctl -u llama-server" >&2; exit 1; }
 
 echo "   one test completion (times the model)..."
 START=$(date +%s)
-REPLY="$(curl -sf http://127.0.0.1:8080/completion \
-  -H 'Content-Type: application/json' \
-  -d '{"prompt":"<|im_start|>user\nReply with exactly: OK<|im_end|>\n<|im_start|>assistant\n","n_predict":8,"temperature":0}' \
+REPLY="$(http http://127.0.0.1:8080/completion \
+  '{"prompt":"<|im_start|>user\nReply with exactly: OK<|im_end|>\n<|im_start|>assistant\n","n_predict":8,"temperature":0}' \
   | python3 -c 'import json,sys; print(json.load(sys.stdin).get("content","").strip())')"
 ELAPSED=$(( $(date +%s) - START ))
 echo "   model replied: '$REPLY' in ${ELAPSED}s"

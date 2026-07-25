@@ -16,12 +16,13 @@ POST-only and additionally require a matching CSRF header + same-origin.
 import hmac
 import json
 import os
+import secrets
 import socketserver
 import subprocess
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from . import jobs, llm, models, net
+from . import jobs, llm, models, net, users
 from .config import Config
 from .gitops import Git
 from .vaultio import Vault
@@ -166,6 +167,11 @@ def write_prompt(cfg, name, text):
 
 def make_handler(cfg):
     token = read_token(cfg)
+    # opaque per-login sessions: cookie value -> username. In-memory on
+    # purpose (ponytail: a web restart just makes everyone re-login; the vault
+    # is untouched). The legacy shared token still authenticates directly as
+    # the built-in "admin" profile, so profiles can never lock anyone out.
+    sessions = {}
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "wikigardener"
@@ -181,8 +187,17 @@ def make_handler(cfg):
                     return part.strip()[len("wg_session="):]
             return ""
 
+        def _current_user(self):
+            """The logged-in profile name, or None. Legacy token -> 'admin'."""
+            cookie = self._cookie_token()
+            if not cookie:
+                return None
+            if token and hmac.compare_digest(cookie, token):
+                return "admin"
+            return sessions.get(cookie)
+
         def _authed(self):
-            return token and hmac.compare_digest(self._cookie_token(), token)
+            return self._current_user() is not None
 
         def _same_origin(self):
             host = self.headers.get("Host", "")
@@ -193,7 +208,13 @@ def make_handler(cfg):
             return True
 
         def _csrf_ok(self):
-            return token and hmac.compare_digest(self.headers.get("X-WG-CSRF", ""), token)
+            # double-submit: the CSRF header must equal the caller's own
+            # session cookie (the page is rendered with that value). Works for
+            # both the legacy token and per-user session ids.
+            cookie = self._cookie_token()
+            return bool(cookie) and hmac.compare_digest(
+                self.headers.get("X-WG-CSRF", ""), cookie
+            )
 
         def _send(self, code, body, ctype="application/json"):
             if isinstance(body, (dict, list)):
@@ -201,6 +222,10 @@ def make_handler(cfg):
             elif isinstance(body, str):
                 body = body.encode("utf-8")
             self.send_response(code)
+            # body is always UTF-8 (above); declare it so browsers don't
+            # fall back to Latin-1 and mojibake the 🌱 in the title
+            if ctype.startswith("text/") or ctype == "application/json":
+                ctype += "; charset=utf-8"
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
@@ -228,7 +253,7 @@ def make_handler(cfg):
                 self.end_headers()
                 return
             if path == "/":
-                return self._send(200, _dashboard_html(token), "text/html")
+                return self._send(200, _dashboard_html(self._cookie_token()), "text/html")
             if path == "/api/status":
                 return self._send(200, read_status(cfg))
             if path == "/api/queue":
@@ -237,7 +262,7 @@ def make_handler(cfg):
                 return self._send(200, models.list_models(cfg))
             if path == "/api/git/log":
                 git = Git(cfg.vault_dir)
-                return self._send(200, {"log": git.log_since("", "--oneline -20")})
+                return self._send(200, {"log": git.log_since("", "--oneline", "-20")})
             if path == "/api/git/diff":
                 sha = _query(self.path, "sha")
                 git = Git(cfg.vault_dir)
@@ -263,15 +288,25 @@ def make_handler(cfg):
             path = self.path.split("?", 1)[0]
             if path == "/login":
                 params = self._body_params()
-                if token and hmac.compare_digest(str(params.get("password", "")), token):
+                username = str(params.get("username", "")).strip()
+                password = str(params.get("password", ""))
+                cookie = None
+                if not username or username == "admin":
+                    # legacy / admin login: password is the shared token itself
+                    if token and hmac.compare_digest(password, token):
+                        cookie = token
+                elif users.verify(cfg.users_file, username, password):
+                    cookie = secrets.token_hex(24)
+                    sessions[cookie] = username
+                if cookie:
                     self.send_response(204)
                     self.send_header(
                         "Set-Cookie",
-                        "wg_session=%s; HttpOnly; SameSite=Strict; Path=/" % token,
+                        "wg_session=%s; HttpOnly; SameSite=Strict; Path=/" % cookie,
                     )
                     self.end_headers()
                 else:
-                    self._send(401, {"error": "bad password"})
+                    self._send(401, {"error": "bad login"})
                 return
             if not self._authed():
                 return self._send(401, {"error": "unauthenticated"})
@@ -298,6 +333,20 @@ def make_handler(cfg):
                     return self._send(200, write_prompt(cfg, params.get("name"), params.get("text", "")))
                 except ValueError as exc:
                     return self._send(400, {"error": str(exc)})
+            if path == "/api/ask":
+                prompt = str(params.get("prompt", "")).strip()
+                if not prompt:
+                    return self._send(400, {"error": "empty prompt"})
+                if not cfg.claude_bridge_url:
+                    return self._send(400, {"error": "Sonnet bridge not configured"})
+                try:
+                    text = llm.bridge_ask(
+                        cfg.claude_bridge_url, cfg.claude_bridge_token,
+                        str(params.get("system", "")), prompt,
+                    )
+                    return self._send(200, {"text": text})
+                except llm.LlmError as exc:
+                    return self._send(502, {"error": str(exc)})
             return self._send(404, {"error": "not found"})
 
     return Handler
@@ -337,12 +386,13 @@ _LOGIN_HTML = """<!doctype html><meta name=viewport content="width=device-width,
 form{background:#1a1d24;padding:2rem;border-radius:12px;min-width:280px}input,button{width:100%;padding:.6rem;margin:.3rem 0;border-radius:8px;border:1px solid #333;background:#0f1115;color:#e6e6e6;box-sizing:border-box}
 button{background:#3b82f6;border:0;cursor:pointer;font-weight:600}</style>
 <form onsubmit="login(event)"><h2>🌱 wikigardener</h2>
-<input id=pw type=password placeholder="dashboard password" autofocus>
+<input id=user placeholder="profile (blank = admin)" autocomplete=username>
+<input id=pw type=password placeholder="password" autofocus autocomplete=current-password>
 <button>Unlock</button><p id=err style=color:#f87171></p></form>
 <script>async function login(e){e.preventDefault();
 const r=await fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},
-body:JSON.stringify({password:document.getElementById('pw').value})});
-if(r.ok)location='/';else document.getElementById('err').textContent='wrong password';}</script>"""
+body:JSON.stringify({username:document.getElementById('user').value,password:document.getElementById('pw').value})});
+if(r.ok)location='/';else document.getElementById('err').textContent='wrong login';}</script>"""
 
 
 def _dashboard_html(csrf):
@@ -381,6 +431,10 @@ textarea{height:200px;font-family:ui-monospace,monospace;font-size:.8rem}
  <div class=card><h2>Model</h2><select id=models></select>
    <div><button onclick="modelDownload()">Download</button>
    <button class=pri onclick="modelUse()">Switch to</button></div></div>
+ <div class=card style=grid-column:1/-1><h2>Ask Sonnet <small>· via your Mac</small></h2>
+   <textarea id=askq style=height:80px placeholder="Ask the smart model — runs on your Mac through Claude, when reachable"></textarea>
+   <button class=pri onclick=ask()>Ask</button>
+   <pre id=askout></pre></div>
  <div class=card style=grid-column:1/-1><h2>Recent commits</h2><pre id=gitlog></pre></div>
  <div class=card style=grid-column:1/-1><h2>Log</h2><pre id=log></pre></div>
  <div class=card style=grid-column:1/-1><h2>Prompts</h2>
@@ -401,6 +455,11 @@ async function pollJob(id){const el=document.querySelector('#job small');
  const t=setInterval(async()=>{const j=await get('/api/jobs/'+id);if(!j)return;
  el.textContent=id+': '+j.state;if(j.state!=='running'){clearInterval(t);refresh()}},2000)}
 function row(k,v){return '<div class=kv><span>'+k+'</span><b>'+v+'</b></div>'}
+async function ask(){const q=document.getElementById('askq').value.trim();if(!q)return;
+ const out=document.getElementById('askout');out.textContent='thinking… (Sonnet on your Mac)';
+ const r=await fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json','X-WG-CSRF':CSRF},
+  body:JSON.stringify({prompt:q})});const j=await r.json();
+ out.textContent=j.text||('error: '+(j.error||'failed'));}
 async function refresh(){const s=await get('/api/status');
  document.getElementById('tps').textContent=s.tokens_per_sec?('· '+s.tokens_per_sec+' tok/s'):'';
  const dot=s.llama_healthy?'<span class="dot ok"></span>':'<span class="dot bad"></span>';

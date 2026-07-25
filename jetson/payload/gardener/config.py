@@ -24,6 +24,7 @@ DEFAULTS = {
     "DASHBOARD_PORT": "8088",
     "DASHBOARD_BIND": "0.0.0.0",
     "DASHBOARD_TOKEN_FILE": "/etc/wikigardener/dashboard.token",
+    "USERS_FILE": "/etc/wikigardener/users.json",
     "MODELS_DIR": "/opt/wikigardener/models",
     "MODELS_CATALOG": "/opt/wikigardener/models.catalog",
     "RUNTIME_ENV": "/etc/wikigardener/runtime.env",
@@ -35,6 +36,9 @@ DEFAULTS = {
     "NTFY_SERVER": "https://ntfy.sh",
     "NOTIFY_DIR": "/var/lib/wikigardener/notify",
     "SUGGEST_MAX": "4",
+    # on-demand Sonnet via the Mac bridge (empty = disabled, stays local-only)
+    "CLAUDE_BRIDGE_URL": "",
+    "CLAUDE_BRIDGE_TOKEN": "",
 }
 
 _INT_KEYS = (

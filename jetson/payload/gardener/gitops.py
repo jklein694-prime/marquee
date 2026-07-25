@@ -86,9 +86,11 @@ class Git(object):
         tags = [t for t in out.split("\n") if t]
         return tags[0] if tags else ""
 
-    def log_since(self, ref, fmt="--stat"):
+    def log_since(self, ref, *fmt):
+        # *fmt so callers can pass several flags ("--oneline", "-20") as
+        # separate args; git rejects "--oneline -20" arriving as one token.
         rev_range = "%s..HEAD" % ref if ref else "HEAD"
-        return self._run("log", fmt, rev_range, check=False)
+        return self._run("log", *(fmt or ("--stat",)), rev_range, check=False)
 
     def subjects_between(self, since, until):
         """Commit subject lines in a wall-clock window (for the daily log)."""

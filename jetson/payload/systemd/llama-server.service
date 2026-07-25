@@ -4,13 +4,16 @@ After=local-fs.target
 # no network dependency on purpose: the box is air-gapped
 
 [Service]
-# MODEL_FILE, CTX, LLAMA_VARIANT, LLAMA_EXTRA_ARGS come from runtime.env,
-# rendered by install.sh from the detected tier + build outcome. Unbraced
+# MODEL_FILE, CTX, LLAMA_EXTRA_ARGS come from runtime.env, rendered by
+# install.sh from the detected tier + build outcome. Unbraced
 # $LLAMA_EXTRA_ARGS on purpose: systemd word-splits only the unbraced form,
 # and "-ngl 99" must arrive as two arguments. __MEMORY_MAX__ is sed-rendered
 # at install time because MemoryMax= does not expand environment variables.
+# The executable path is a symlink (install.sh points it at the built
+# variant) because systemd never expands variables in the command position —
+# ${LLAMA_VARIANT} there is a literal filename and a 203/EXEC crash loop.
 EnvironmentFile=/etc/wikigardener/runtime.env
-ExecStart=/opt/wikigardener/bin/llama-server-${LLAMA_VARIANT} \
+ExecStart=/opt/wikigardener/bin/llama-server \
     -m /opt/wikigardener/models/${MODEL_FILE} \
     --host 127.0.0.1 --port 8080 \
     -c ${CTX} -t 3 $LLAMA_EXTRA_ARGS

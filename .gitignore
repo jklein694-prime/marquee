@@ -58,3 +58,6 @@ data/lint-pending.txt
 data/snoozed.json
 data/watchlist.json
 .claude/launch.json
+wikigardener-payload/
+__pycache__/
+*.pyc

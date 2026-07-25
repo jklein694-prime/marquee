@@ -41,6 +41,44 @@ def health(base_url, timeout=5):
         return False
 
 
+def bridge_health(url, token, timeout=4):
+    """True if the Mac Sonnet bridge is reachable and the token is accepted."""
+    if not url or not token:
+        return False
+    req = urllib.request.Request(
+        url.rstrip("/") + "/health", headers={"X-Bridge-Token": token}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status == 200
+    except (urllib.error.URLError, OSError):
+        return False
+
+
+def bridge_ask(url, token, system, user, timeout=130):
+    """One Sonnet completion via the Mac bridge; returns text or raises."""
+    if not url or not token:
+        raise LlmError("Sonnet bridge not configured")
+    body = json.dumps({"system": system, "prompt": user}).encode("utf-8")
+    req = urllib.request.Request(
+        url.rstrip("/") + "/ask",
+        data=body,
+        headers={"Content-Type": "application/json", "X-Bridge-Token": token},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        try:
+            msg = json.loads(exc.read().decode("utf-8")).get("error", str(exc))
+        except (ValueError, OSError):
+            msg = "bridge HTTP %s" % exc.code
+        raise LlmError("Sonnet bridge: %s" % msg)
+    except (urllib.error.URLError, OSError) as exc:
+        raise LlmError("Sonnet bridge unreachable: %s" % exc)
+    return data.get("text", "")
+
+
 def chat(base_url, system, user, max_tokens=300, temperature=0.3, timeout=600):
     """One completion; returns the model's raw text reply."""
     data = _post(
