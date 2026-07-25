@@ -184,11 +184,13 @@ export default function ChatPane({
   onTurnEnd,
   onTrace,
   onOpenHelp,
+  onWatchGraph,
   sendRef,
 }: {
   onTurnEnd: () => void;
   onTrace: (t: TraceEntry) => void;
   onOpenHelp?: () => void;
+  onWatchGraph?: () => void;
   sendRef?: MutableRefObject<ChatSend>;
 }) {
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -451,6 +453,14 @@ export default function ChatPane({
           >
             Stop
           </button>
+          {onWatchGraph && (
+            <button
+              onClick={onWatchGraph}
+              className="cursor-pointer rounded border border-card-border px-2 py-0.5 text-[11px] text-muted hover:border-glow/60 hover:text-glow"
+            >
+              Watch the graph
+            </button>
+          )}
           <span className="ml-auto min-w-0 truncate pl-3 text-[11px] text-muted">
             tip: {TIPS[tipIdx]}
           </span>
@@ -469,7 +479,8 @@ export default function ChatPane({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder={busy ? "the expert is working — messages queue up…" : "Talk movies & shows…"}
-          className="flex-1 rounded-md border border-[#3a2f22] bg-[#1c1713] px-3 py-2 text-sm outline-none placeholder:text-muted focus:border-glow/60 disabled:opacity-60"
+          // text-base (16px) on mobile stops iOS from auto-zooming on focus; desktop keeps 14px
+          className="flex-1 rounded-md border border-[#3a2f22] bg-[#1c1713] px-3 py-2 text-base outline-none placeholder:text-muted focus:border-glow/60 disabled:opacity-60 md:text-sm"
         />
         <button
           type="submit"

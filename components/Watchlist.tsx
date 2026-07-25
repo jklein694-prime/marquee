@@ -37,7 +37,7 @@ export function ReviewForm({
           <button
             key={n}
             onClick={() => setRating(n)}
-            className={`h-6 w-6 rounded text-[11px] ${
+            className={`h-9 w-9 rounded text-[11px] md:h-6 md:w-6 ${
               rating === n
                 ? "bg-glow font-semibold text-background"
                 : "border border-card-border text-muted hover:text-glow"

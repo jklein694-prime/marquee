@@ -50,6 +50,21 @@ body {
   mask-composite: intersect;
 }
 
+/* Screen Test thought subtitle — keyed remount fades each new thought in */
+@keyframes subtitle-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.subtitle-rise {
+  animation: subtitle-rise 0.35s ease-out;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
 }
