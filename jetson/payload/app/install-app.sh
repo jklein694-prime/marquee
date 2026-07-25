@@ -77,6 +77,14 @@ fi
 echo "== installing wikigardener-app.service"
 API_KEY=""
 [ -f "$KEY_FILE" ] && API_KEY="$(cat "$KEY_FILE")"
+# subscription auth for the chat agent (Claude Agent SDK): a token minted by
+# `claude setup-token` on any logged-in machine, copied to the Nano. When
+# present it powers chat via the user's Claude subscription — no API billing.
+OAUTH_TOKEN=""
+[ -f /etc/wikigardener/claude-oauth.token ] && OAUTH_TOKEN="$(cat /etc/wikigardener/claude-oauth.token)"
+# TMDB key (movie search/posters); .env.local never travels via git
+TMDB_KEY=""
+[ -f /etc/wikigardener/tmdb.key ] && TMDB_KEY="$(cat /etc/wikigardener/tmdb.key)"
 cat > /etc/systemd/system/wikigardener-app.service <<EOF
 [Unit]
 Description=Marquee wiki app (Dockerized Next.js) on :3000
@@ -91,6 +99,8 @@ ExecStart=/usr/bin/docker run --name wikigardener-app --rm \\
   -v $VAULT:/vault:ro \\
   -e VAULT_PATH=/vault \\
   -e ANTHROPIC_API_KEY=$API_KEY \\
+  -e CLAUDE_CODE_OAUTH_TOKEN=$OAUTH_TOKEN \\
+  -e TMDB_API_KEY=$TMDB_KEY \\
   $IMAGE npm start
 ExecStop=/usr/bin/docker stop wikigardener-app
 Restart=on-failure
