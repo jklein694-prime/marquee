@@ -99,8 +99,9 @@ ExecStartPre=-/usr/bin/docker rm -f wikigardener-app
 ExecStart=/usr/bin/docker run --name wikigardener-app --rm \\
   -p 3000:3000 -m 700m \\
   -v $APP_DIR:/app -w /app \\
-  -v $VAULT:/vault:ro \\
+  -v $VAULT:/vault \\
   -e VAULT_PATH=/vault \\
+  -e IS_SANDBOX=1 \\
   -e ANTHROPIC_API_KEY=$API_KEY \\
   -e CLAUDE_CODE_OAUTH_TOKEN=$OAUTH_TOKEN \\
   -e TMDB_API_KEY=$TMDB_KEY \\
@@ -122,6 +123,9 @@ cat <<EOF
   open:      http://${IP:-<nano-ip>}:3000     (graph view + wiki + chat)
   status:    systemctl status wikigardener-app
   update:    re-run this script during an online window (pulls + rebuilds)
-  NOTE: the vault is mounted read-only into the app; the gardener stays the
-  single writer. Chat needs an online window; browsing works offline.
+  NOTE: the vault is mounted read-write (chat writes pages directly via the
+  page-writer subagent); the gardener also writes on its own timer. Both go
+  through git, which serializes commits itself — a rare overlap fails one
+  side's operation for that cycle, it doesn't corrupt anything. Chat needs an
+  online window; browsing works offline.
 EOF
