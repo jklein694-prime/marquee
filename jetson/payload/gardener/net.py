@@ -40,13 +40,12 @@ def off():
 
 
 def online(host="api.anthropic.com", timeout=10):
-    """True if we can reach the network right now (a HEAD to host)."""
+    """True if we can reach the network right now. Pure stdlib (a TCP connect
+    to host:443) — no curl dependency, since minimal JetPack lacks it."""
+    import socket
+
     try:
-        proc = subprocess.run(
-            ("curl", "-sI", "--max-time", str(timeout), "https://%s" % host),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        socket.create_connection((host, 443), timeout=timeout).close()
+        return True
     except OSError:
         return False
-    return proc.returncode == 0

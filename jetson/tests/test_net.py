@@ -40,8 +40,18 @@ def test_nmcli_missing_is_graceful(monkeypatch):
     assert net.on()[0] is False
 
 
-def test_online_checks_curl_rc(monkeypatch):
-    monkeypatch.setattr(net.subprocess, "run", lambda *a, **k: FakeProc(0))
+def test_online_uses_socket(monkeypatch):
+    import socket
+
+    class _S:
+        def close(self):
+            pass
+
+    monkeypatch.setattr(socket, "create_connection", lambda *a, **k: _S())
     assert net.online() is True
-    monkeypatch.setattr(net.subprocess, "run", lambda *a, **k: FakeProc(7))
+
+    def boom(*a, **k):
+        raise OSError("no route")
+
+    monkeypatch.setattr(socket, "create_connection", boom)
     assert net.online() is False
