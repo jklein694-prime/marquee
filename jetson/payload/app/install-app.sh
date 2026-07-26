@@ -50,7 +50,10 @@ else
 fi
 
 echo "== pulling $IMAGE (arm64)"
-docker pull "$IMAGE"
+# best-effort: a flaky link must not kill the install when the image is
+# already local; only die if it's neither pullable nor present
+docker pull "$IMAGE" || docker image inspect "$IMAGE" >/dev/null 2>&1 \
+  || { echo "FATAL: $IMAGE not present and pull failed" >&2; exit 1; }
 
 echo "== npm ci + next build inside the container (slow on the Nano; one-time per update)"
 # the build is the RAM-hungriest moment this device ever sees — pause the
