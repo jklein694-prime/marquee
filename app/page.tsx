@@ -9,73 +9,6 @@ import PredictPanel from "@/components/PredictPanel";
 import HelpPanel from "@/components/HelpPanel";
 import { emitThinking, traceToThinking } from "@/lib/liveThinking";
 
-// Louie greets you with a growl on page open. Synthesized (no audio asset):
-// a low sawtooth with a ~24Hz tremble through a lowpass, fading over ~0.8s.
-// Browsers block autoplay, so if the context starts suspended we growl on the
-// first tap/click instead — the policy allows nothing earlier than that.
-function useLouieGrowl() {
-  useEffect(() => {
-    // never let a sound effect take down the page: bail on browsers without
-    // unprefixed AudioContext, and treat any audio failure as a skipped growl
-    const AC: typeof AudioContext | undefined =
-      typeof window !== "undefined"
-        ? (window.AudioContext ??
-           (window as unknown as { webkitAudioContext?: typeof AudioContext })
-             .webkitAudioContext)
-        : undefined;
-    if (!AC) return;
-    let done = false;
-    const growl = () => {
-      if (done) return;
-      done = true;
-      try {
-        realGrowl();
-      } catch {
-        /* no growl beats no page */
-      }
-    };
-    const realGrowl = () => {
-      const ctx = new AC();
-      const t = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(82, t);
-      osc.frequency.exponentialRampToValueAtTime(58, t + 0.8);
-      const tremble = ctx.createOscillator();
-      tremble.frequency.value = 24;
-      const trembleDepth = ctx.createGain();
-      trembleDepth.gain.value = 0.35;
-      const vol = ctx.createGain();
-      vol.gain.setValueAtTime(0.0001, t);
-      vol.gain.exponentialRampToValueAtTime(0.5, t + 0.08);
-      vol.gain.exponentialRampToValueAtTime(0.0001, t + 0.85);
-      const muffle = ctx.createBiquadFilter();
-      muffle.type = "lowpass";
-      muffle.frequency.value = 340;
-      tremble.connect(trembleDepth).connect(vol.gain);
-      osc.connect(muffle).connect(vol).connect(ctx.destination);
-      osc.start(t);
-      tremble.start(t);
-      osc.stop(t + 0.9);
-      tremble.stop(t + 0.9);
-      osc.onended = () => ctx.close();
-    };
-    let canAutoplay = false;
-    try {
-      const probe = new AC();
-      canAutoplay = probe.state === "running";
-      probe.close();
-    } catch {
-      return;
-    }
-    if (canAutoplay) {
-      growl();
-      return;
-    }
-    window.addEventListener("pointerdown", growl, { once: true });
-    return () => window.removeEventListener("pointerdown", growl);
-  }, []);
-}
 
 const KIND_STYLE: Record<TraceEntry["kind"], string> = {
   init: "text-muted",
@@ -174,7 +107,6 @@ function MorePanel({ onPick }: { onPick: (p: Panel) => void }) {
 }
 
 export default function Home() {
-  useLouieGrowl();
   const [graphVersion, setGraphVersion] = useState(0);
   const [panel, setPanel] = useState<Panel>(null);
   const [graphMode, setGraphMode] = useState<"2d" | "3d">("2d");
@@ -199,7 +131,7 @@ export default function Home() {
         >
           <header className="flex items-center gap-3 border-b border-card-border px-5 py-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/icon.png" alt="Louie" className="h-8 w-8" />
+            <img src="/icon.png" alt="Louie" className="h-8 w-8 louie-growl" />
             <h1 className="text-lg font-semibold tracking-wide text-glow">
               Marquee
             </h1>
