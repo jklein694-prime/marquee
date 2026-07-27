@@ -15,11 +15,27 @@ import { emitThinking, traceToThinking } from "@/lib/liveThinking";
 // first tap/click instead — the policy allows nothing earlier than that.
 function useLouieGrowl() {
   useEffect(() => {
+    // never let a sound effect take down the page: bail on browsers without
+    // unprefixed AudioContext, and treat any audio failure as a skipped growl
+    const AC: typeof AudioContext | undefined =
+      typeof window !== "undefined"
+        ? (window.AudioContext ??
+           (window as unknown as { webkitAudioContext?: typeof AudioContext })
+             .webkitAudioContext)
+        : undefined;
+    if (!AC) return;
     let done = false;
     const growl = () => {
       if (done) return;
       done = true;
-      const ctx = new AudioContext();
+      try {
+        realGrowl();
+      } catch {
+        /* no growl beats no page */
+      }
+    };
+    const realGrowl = () => {
+      const ctx = new AC();
       const t = ctx.currentTime;
       const osc = ctx.createOscillator();
       osc.type = "sawtooth";
@@ -44,9 +60,14 @@ function useLouieGrowl() {
       tremble.stop(t + 0.9);
       osc.onended = () => ctx.close();
     };
-    const probe = new AudioContext();
-    const canAutoplay = probe.state === "running";
-    probe.close();
+    let canAutoplay = false;
+    try {
+      const probe = new AC();
+      canAutoplay = probe.state === "running";
+      probe.close();
+    } catch {
+      return;
+    }
     if (canAutoplay) {
       growl();
       return;
