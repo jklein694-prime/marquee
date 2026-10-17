@@ -1,5 +1,15 @@
 # wikigardener — air-gapped wiki gardener for the original Jetson Nano
 
+> **Host mode (current default).** `sudo wikigardener update` now turns the
+> Nano into a pure **Marquee host**: it retires the on-device AI (llama-server,
+> the gardener/suggest/notify timers, the gardener dashboard, the GGUF models —
+> Claude does all the AI), keeps the vault and its hourly git sync, gives the
+> app 2GB, and publishes it over **HTTPS on your tailnet** with `tailscale
+> serve` so the iPhone can install it as a home-screen app with push
+> notifications. Details: [Hosting the Marquee app](#hosting-the-marquee-app-on-the-nano-3000).
+> Put `KEEP_LOCAL_AI=1` in `/etc/wikigardener/gardener.conf` to keep the
+> gardener described below.
+
 > **New here?** For the exact hands-on walkthrough — reset the microSD, flash it,
 > boot headless, and SSH in — see **[QUICKSTART.md](QUICKSTART.md)**. This README
 > is the full reference.
@@ -299,24 +309,47 @@ wikigardener suggest --force  # run a suggestions pass right now
 
 ## Hosting the Marquee app on the Nano (:3000)
 
-The Nano can serve the full web app (graph view, wiki browser, chat) against
-the same vault the gardener tends:
+The Nano serves the full web app (graph view, wiki browser, chat) from the
+vault on its SD card. First install, during an online window:
 
 ```bash
-# on the Nano, during an online window:
 sudo bash /opt/wikigardener/app/install-app.sh https://github.com/<you>/marquee.git
-# then open http://<nano-ip>:3000
+```
+
+Every update after that is one command (safe to run from Termius on a phone —
+it runs as a background unit, so a dropped SSH session doesn't kill it):
+
+```bash
+sudo wikigardener update        # pull main, retire the local AI, HTTPS, rebuild
+sudo wikigardener update log    # reattach to a running update / see the result
 ```
 
 It runs Next.js inside a **Docker Node 20 container** (the Nano's own glibc is
-too old for Node 20 — the container brings its own). The vault mounts
-**read-only** into the app, so the gardener remains the single writer. Honest
-caveats, all printed by the script: the Node-20-container-on-JetPack-4.6
-combination is a hardware-verify item; RAM is tight next to llama-server (the
-app is capped at 700MB — consider the 0.5b model tier when both run; don't run
-both on a 2GB Nano); chat needs an online window, browsing works offline.
-**Fallback:** run the app on your laptop against a git-synced clone of the
-vault.
+too old for Node 20 — the container brings its own), capped at 2GB once the
+on-device AI is retired (700MB while llama-server is still installed).
+
+**On the iPhone.** iOS only installs web apps and delivers push over HTTPS.
+`host-mode.sh` (run by every update) publishes the app with `tailscale
+serve`; it needs **MagicDNS** and **HTTPS Certificates** turned on in the
+Tailscale admin console (DNS page) once. Then:
+
+1. With Tailscale connected on the phone, open
+   `https://<nano-name>.<tailnet>.ts.net` (the update prints the exact URL).
+2. Share -> **Add to Home Screen**, and open Marquee from the new icon.
+3. More -> **Notifications -> Turn on** to get a notification when a reply
+   finishes while the app is in the background.
+
+**Replies don't stop when you leave the app.** A chat turn runs on the Nano as
+a background job; the app streams it and, after iOS suspends or reloads it,
+reconnects and picks up where it left off (the conversation is rebuilt from
+the Nano). Only the Stop button ends a reply early.
+
+**Chat engine.** With an API key in `/etc/wikigardener/anthropic.key` the chat
+runs on the Claude API directly (claude-sonnet-5-5, in-process tools,
+parallel subagents, prompt caching) — no Claude Code process per message. A
+subscription-only setup (`/etc/wikigardener/claude-oauth.token`, no key)
+falls back to the slower Claude Agent SDK engine, the only one that can use
+that token.
 
 ## Your Claude credentials on the device
 
