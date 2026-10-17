@@ -1,4 +1,5 @@
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { execFileSync } from "child_process";
 import { describe, expect, it } from "vitest";
@@ -31,7 +32,7 @@ describe("vault confinement", () => {
     // writing to a not-yet-existing path under the symlink is refused too
     await expect(writeFile("wiki/movies/escape/new/Thing.md", "x")).rejects.toThrow(/outside the vault/);
     // and grep never reads through it
-    const secret = fs.mkdtempSync(path.join(require("os").tmpdir(), "outside-"));
+    const secret = fs.mkdtempSync(path.join(os.tmpdir(), "outside-"));
     fs.writeFileSync(path.join(secret, "s.md"), "TOPSECRET\n");
     fs.symlinkSync(path.join(secret, "s.md"), path.join(vault(), "wiki/movies/leak.md"));
     expect(grep({ pattern: "TOPSECRET" })).toBe("No matches found");

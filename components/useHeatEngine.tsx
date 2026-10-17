@@ -12,29 +12,42 @@ import type {
   NodeObject,
 } from "react-force-graph-3d";
 import type { GraphNode, GraphLink } from "@/lib/vault";
+import { graphPalette } from "@/lib/theme";
 
 // mirror of lib/agent.ts norm() — that module is server-only (pulls the agent SDK)
 export const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
-export const COLORS: Record<string, string> = {
-  loved: "#f5b942",
-  liked: "#f5b942",
-  disliked: "#b3402e",
-  meh: "#8a8178",
-};
-export const KIND_COLORS: Record<string, string> = {
-  genre: "#e07b39",
-  watchlist: "#f5b94266",
-  taste: "#e8dcc8",
-  movie: "#8a8178",
-  // translucent when cold (nodeOpacity is 1, so color alpha alone reads
-  // ghostly); the heat lerp takes a hot ghost to full-opacity glow — "forming"
-  ghost: "#e8dcc855",
-};
-
+// verdict is ordinal (lightness), kind is categorical (hue) — see globals.css
 export function nodeColor(n: GraphNode): string {
-  if (n.kind === "movie" && n.verdict) return COLORS[n.verdict] ?? "#8a8178";
-  return KIND_COLORS[n.kind] ?? "#8a8178";
+  const p = graphPalette();
+  if (n.kind === "movie") {
+    switch (n.verdict) {
+      case "loved":
+        return p.loved;
+      case "liked":
+        return p.liked;
+      case "meh":
+        return p.meh;
+      case "disliked":
+        return p.disliked;
+      default:
+        return p.unrated; // a page without a verdict is visibly "not data"
+    }
+  }
+  switch (n.kind) {
+    case "genre":
+      return p.category;
+    case "watchlist":
+      return p.watchlist;
+    case "taste":
+      return p.taste;
+    // translucent when cold (nodeOpacity is 1, so color alpha alone reads
+    // ghostly); the heat lerp takes a hot ghost to full-opacity glow — "forming"
+    case "ghost":
+      return p.ghost;
+    default:
+      return p.unrated;
+  }
 }
 
 // force-graph replaces link endpoint strings with node objects after layout
@@ -54,7 +67,9 @@ export function withAlpha(hex: string, a: number): string {
   return `rgba(${r},${g},${b},${a})`;
 }
 
-const GLOW = [245, 185, 66]; // #f5b942
+// the heat target (accent) and the cold edge, as rgb triples for lerping
+const glowRgb = () => rgb(graphPalette().accent);
+const edgeRgb = () => rgb(graphPalette().edge);
 const BASE_VAL: Record<string, number> = { genre: 7, taste: 3.5, ghost: 3.5 };
 
 // pin every settled node in place so ghost arrivals can't jiggle the
@@ -76,10 +91,11 @@ export function pinNodes(nodes: GraphNode[]) {
 // and GraphView's 2D canvas paint
 export function heatColor(base: string, h: number): string {
   const [r, g, b] = rgb(base);
+  const [gr, gg, gb] = glowRgb();
   const t = Math.min(1, h);
-  return `rgb(${Math.round(r + (GLOW[0] - r) * t)},${Math.round(
-    g + (GLOW[1] - g) * t
-  )},${Math.round(b + (GLOW[2] - b) * t)})`;
+  return `rgb(${Math.round(r + (gr - r) * t)},${Math.round(g + (gg - g) * t)},${Math.round(
+    b + (gb - b) * t
+  )})`;
 }
 
 export interface Spot {
@@ -116,7 +132,9 @@ export function useHeatEngine(
   const lastGlideRef = useRef(0);
   const lastParticleRef = useRef(0);
   const optsRef = useRef(opts);
-  optsRef.current = opts;
+  useEffect(() => {
+    optsRef.current = opts;
+  });
 
   const nodeById = useMemo(() => new Map(graph.nodes.map((n) => [n.id, n])), [graph]);
   const byNorm = useMemo(() => {
@@ -138,7 +156,9 @@ export function useHeatEngine(
   // methods stay identity-stable across renders (safe effect deps) by reading
   // the latest maps through a ref
   const mapsRef = useRef({ nodeById, byNorm, adj });
-  mapsRef.current = { nodeById, byNorm, adj };
+  useEffect(() => {
+    mapsRef.current = { nodeById, byNorm, adj };
+  }, [nodeById, byNorm, adj]);
 
   const resolve = useCallback((raw: string): { id: string; label: string } | undefined => {
     const { nodeById, byNorm } = mapsRef.current;
@@ -257,7 +277,9 @@ export function useHeatEngine(
   // at 10Hz while hot, so force-graph re-reads styles exactly when heat or
   // caller state (selection, phase) changes
   void heatVersion;
-  const pulse = 0.7 + 0.3 * Math.sin(Date.now() / 140);
+  // sampled at paint time (force-graph calls the accessors from its own
+  // animation frame), never during render
+  const pulse = () => 0.7 + 0.3 * Math.sin(Date.now() / 140);
   const linkHeat = (l: LinkObject) => {
     const gl = l as unknown as GraphLink;
     return Math.max(
@@ -275,22 +297,24 @@ export function useHeatEngine(
     nodeVal: (node: NodeObject) => {
       const n = node as unknown as GraphNode;
       const h = heatRef.current.get(n.id) ?? 0;
-      return (BASE_VAL[n.kind] ?? 5) + h * 5 * (h > 0.05 ? pulse : 1);
+      return (BASE_VAL[n.kind] ?? 5) + h * 5 * (h > 0.05 ? pulse() : 1);
     },
     // an edge lights when EITHER endpoint is hot — a considered node shows
     // all its connections, not just links between two simultaneously-hot nodes
     linkColor: (l: LinkObject) => {
       const h = Math.min(1, linkHeat(l));
-      if (h < 0.15) return optsRef.current.coldLink?.(l) ?? "#2a221a";
-      // lerp card-border → glow by heat
-      return `rgb(${Math.round(42 + (GLOW[0] - 42) * h)},${Math.round(
-        34 + (GLOW[1] - 34) * h
-      )},${Math.round(26 + (GLOW[2] - 26) * h)})`;
+      if (h < 0.15) return optsRef.current.coldLink?.(l) ?? graphPalette().edge;
+      // lerp edge → accent by heat
+      const [er, eg, eb] = edgeRgb();
+      const [gr, gg, gb] = glowRgb();
+      return `rgb(${Math.round(er + (gr - er) * h)},${Math.round(eg + (gg - eg) * h)},${Math.round(
+        eb + (gb - eb) * h
+      )})`;
     },
     linkWidth: (l: LinkObject) =>
-      linkHeat(l) > 0.15 ? 1 + 2 * linkHeat(l) * pulse : optsRef.current.coldLinkWidth?.(l) ?? 1,
+      linkHeat(l) > 0.15 ? 1 + 2 * linkHeat(l) * pulse() : optsRef.current.coldLinkWidth?.(l) ?? 1,
     linkDirectionalParticleWidth: 1.8,
-    linkDirectionalParticleColor: () => "#f5b942",
+    linkDirectionalParticleColor: () => graphPalette().accent,
     linkDirectionalParticleSpeed: 0.02,
   };
 
@@ -306,8 +330,8 @@ export function SpotCard({ spot }: { spot: Spot | null }) {
       key={spot.id + spot.thought}
       className="pointer-events-none absolute bottom-6 left-0 right-0 z-10 flex justify-center"
     >
-      <div className="subtitle-rise max-w-[80%] rounded-lg border border-card-border bg-card/90 px-4 py-2 text-center backdrop-blur-sm">
-        <div className="text-sm font-medium text-glow">{spot.label}</div>
+      <div className="subtitle-rise max-w-[80%] rounded-lg border border-border bg-surface-1/90 px-4 py-2 text-center backdrop-blur-sm">
+        <div className="text-sm font-medium text-accent">{spot.label}</div>
         <div className="text-xs text-muted">{spot.thought}</div>
       </div>
     </div>

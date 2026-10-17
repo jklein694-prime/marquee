@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { ReviewForm } from "./Watchlist";
 import type { ChatSend } from "./ChatPane";
+import { Poster } from "./Poster";
+import { Button } from "./ui";
 
 export interface SearchResult {
   id: number;
@@ -13,32 +15,42 @@ export interface SearchResult {
 }
 
 // debounced TMDB typeahead + poster result list — shared by Quick Rate and Screen Test
-export function TitleSearch({
-  onPick,
-  autoFocus,
-}: {
-  onPick: (r: SearchResult) => void;
-  autoFocus?: boolean;
-}) {
+export function TitleSearch({ onPick, autoFocus }: { onPick: (r: SearchResult) => void; autoFocus?: boolean }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!query.trim()) {
-      setResults([]);
-      return;
-    }
-    setSearching(true);
+    if (!query.trim()) return;
+    let stale = false;
     const id = setTimeout(() => {
+      setSearching(true);
+      setError("");
       fetch(`/api/search?q=${encodeURIComponent(query)}`)
-        .then((r) => r.json())
-        .then(setResults)
-        .catch(() => setResults([]))
-        .finally(() => setSearching(false));
+        .then(async (r) => {
+          if (!r.ok) {
+            // a missing TMDB key is a setup problem, not "no results"
+            const body = (await r.json().catch(() => ({}))) as { error?: string };
+            throw new Error(body.error || `search failed (${r.status})`);
+          }
+          return r.json();
+        })
+        .then((hits) => !stale && setResults(hits))
+        .catch((err) => {
+          if (stale) return;
+          setResults([]);
+          setError(err instanceof Error ? err.message : "search failed");
+        })
+        .finally(() => !stale && setSearching(false));
     }, 300);
-    return () => clearTimeout(id);
+    return () => {
+      stale = true;
+      clearTimeout(id);
+    };
   }, [query]);
+  // an empty query shows nothing, whatever the last fetch returned
+  const shown = query.trim() ? results : [];
 
   return (
     <div className="space-y-2">
@@ -47,10 +59,13 @@ export function TitleSearch({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search a title…"
-        className="w-full rounded-md border border-card-border bg-card px-3 py-2 text-sm outline-none placeholder:text-muted focus:border-glow/60"
+        aria-label="Search a title"
+        type="search"
+        enterKeyHint="search"
+        className="min-h-11 w-full rounded-md border border-border bg-surface-2 px-3 text-base outline-none placeholder:text-muted focus:border-accent-border md:text-sm"
       />
       {searching && <div className="text-xs text-muted">searching…</div>}
-      {results.map((r) => (
+      {shown.map((r) => (
         <button
           key={`${r.media}-${r.id}`}
           onClick={() => {
@@ -58,32 +73,20 @@ export function TitleSearch({
             setResults([]);
             onPick(r);
           }}
-          className="flex w-full items-center gap-3 rounded-lg border border-card-border bg-card p-2.5 text-left hover:border-glow/60"
+          className="flex w-full items-center gap-3 rounded-lg border border-border bg-surface-1 p-2 text-left hover:border-accent-border"
         >
-          {r.poster_path ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={`https://image.tmdb.org/t/p/w92${r.poster_path}`}
-              alt={r.title}
-              className="h-16 w-11 shrink-0 rounded object-cover"
-            />
-          ) : (
-            <div className="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-background text-center text-[9px] text-muted">
-              no poster
-            </div>
-          )}
+          <Poster path={r.poster_path} alt="" width={44} height={66} className="h-[66px] w-11 shrink-0 rounded" />
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-medium">
+            <div className="truncate text-base font-medium md:text-sm">
               {r.title}
               {r.year && <span className="text-muted"> ({r.year})</span>}
             </div>
-            <span className="text-[11px] text-muted">{r.media === "tv" ? "TV" : "Movie"}</span>
+            <span className="text-xs text-muted">{r.media === "tv" ? "TV" : "Movie"}</span>
           </div>
         </button>
       ))}
-      {!searching && query.trim() && results.length === 0 && (
-        <div className="text-xs text-muted">No results.</div>
-      )}
+      {error && query.trim() && <div className="text-sm text-danger md:text-xs">{error}</div>}
+      {!searching && !error && query.trim() && shown.length === 0 && <div className="text-xs text-muted">No results.</div>}
     </div>
   );
 }
@@ -93,7 +96,7 @@ interface LogEntry {
   label: string;
 }
 
-export default function QuickRate({ onChat }: { onChat: ChatSend }) {
+function QuickRate({ onChat }: { onChat: ChatSend }) {
   const [picked, setPicked] = useState<SearchResult | null>(null);
   const [pending, setPending] = useState<LogEntry[]>([]);
   const [logged, setLogged] = useState<LogEntry[]>([]);
@@ -120,60 +123,59 @@ export default function QuickRate({ onChat }: { onChat: ChatSend }) {
   }
 
   return (
-    <div className="h-full space-y-4 overflow-y-auto px-5 py-4">
+    <div className="h-full space-y-4 overflow-y-auto px-4 py-4 md:px-5">
       <div>
-        <div className="mb-1.5 text-sm font-medium text-glow">Quick rate</div>
-        <div className="mb-2 text-xs text-muted">
-          Search any movie or show, rate it, and it logs to your taste graph
-          in the background — no need to add it to your watchlist first.
+        <h2 className="mb-1 text-base font-medium text-fg md:text-sm">Quick rate</h2>
+        <div className="text-sm text-muted md:text-xs">
+          Search any movie or show, rate it, and it logs to your taste graph in the background — no need to add it to
+          your watchlist first.
         </div>
       </div>
 
       {picked ? (
-        <div className="rounded-lg border border-card-border bg-card p-2.5">
+        <div className="rounded-lg border border-border bg-surface-1 p-3">
           <div className="flex gap-3">
-            {picked.poster_path ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={`https://image.tmdb.org/t/p/w185${picked.poster_path}`}
-                alt={picked.title}
-                className="h-24 w-16 shrink-0 rounded object-cover"
-              />
-            ) : (
-              <div className="flex h-24 w-16 shrink-0 items-center justify-center rounded bg-background text-center text-[10px] text-muted">
-                no poster
-              </div>
-            )}
+            <Poster path={picked.poster_path} alt="" width={56} height={84} className="h-21 w-14 shrink-0 rounded" eager />
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium leading-tight">
+              <div className="text-base font-medium leading-tight md:text-sm">
                 {picked.title}
                 {picked.year && <span className="text-muted"> ({picked.year})</span>}
               </div>
-              <span className="mt-1 inline-block rounded bg-glow/15 px-1.5 py-0.5 text-[11px] text-glow">
+              <span className="mt-1 inline-block rounded bg-accent-muted px-1.5 py-0.5 text-xs text-accent">
                 {picked.media === "tv" ? "TV" : "Movie"}
               </span>
-              <ReviewForm title={picked.title} onSubmit={submit} onCancel={() => setPicked(null)} />
             </div>
           </div>
+          {/* full card width: ten rating cells never fit beside a poster on a phone */}
+          <ReviewForm title={picked.title} onSubmit={submit} onCancel={() => setPicked(null)} />
         </div>
       ) : (
         <TitleSearch autoFocus onPick={setPicked} />
       )}
 
       {(pending.length > 0 || logged.length > 0) && (
-        <div className="space-y-1.5 border-t border-card-border pt-3">
+        <div className="space-y-1.5 border-t border-border pt-3 text-sm md:text-xs">
           {pending.map((p) => (
-            <div key={p.id} className="flex items-center gap-2 text-xs text-glow">
+            <div key={p.id} className="flex items-center gap-2 text-accent">
               <span className="animate-pulse">●</span> logging {p.label}…
             </div>
           ))}
           {logged.map((l) => (
-            <div key={l.id} className="text-xs text-muted">
+            <div key={l.id} className="text-muted">
               Logged {l.label}.
             </div>
           ))}
+          {logged.length > 0 && (
+            <div className="pt-1">
+              <Button variant="ghost" onClick={() => setLogged([])}>
+                Clear
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
+
+export default memo(QuickRate);

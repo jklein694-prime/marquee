@@ -4,39 +4,63 @@ import {
   writeUserList,
   hubSuggestions,
   enrich,
-  enrichCached,
+  peekSuggestion,
   refreshStale,
   snoozeTitle,
   notInterestedItems,
+  tmdbEnabled,
+  warmSuggestions,
   WatchItem,
 } from "@/lib/watchlist";
 
 export const dynamic = "force-dynamic";
 
+// Stale-while-revalidate: a GET answers from what is on disk and in the memo
+// right away, and kicks the TMDB re-verification off in the background. The
+// first open after a cold start used to wait on one TMDB round-trip per
+// suggestion; now it paints immediately and the client re-reads once the
+// `pending` count says the refresh landed.
+let userRefresh: Promise<void> | null = null;
+
 export async function GET() {
-  // self-healing: anything never verified or past the TTL gets re-checked
-  // against TMDB here, so a bad match (wrong provider, stale trailer) fixes
-  // itself the next time the tab loads instead of staying wrong forever
-  const { items: user, changed } = await refreshStale(readUserList());
-  if (changed) writeUserList(user);
-  const have = new Set(user.map((i) => i.title.toLowerCase()));
-  const suggestions = await Promise.all(
-    hubSuggestions()
-      .filter((s) => !have.has(s.title.toLowerCase()))
-      .map(enrichCached)
-  );
-  return NextResponse.json({ user, suggestions, notInterested: notInterestedItems() });
+  const stored = readUserList();
+  let pending = 0;
+  if (tmdbEnabled()) {
+    // self-healing: anything never verified or past the TTL gets re-checked
+    // against TMDB so a bad match (wrong provider, stale trailer) fixes itself
+    const stale = stored.filter((i) => !i.verifiedAt || Date.now() - i.verifiedAt > 24 * 60 * 60 * 1000).length;
+    if (stale && !userRefresh) {
+      userRefresh = refreshStale(readUserList())
+        .then(({ items, changed }) => {
+          if (changed) writeUserList(items);
+        })
+        .catch(() => {})
+        .finally(() => {
+          userRefresh = null;
+        });
+    }
+    if (userRefresh) pending += stale;
+  }
+  const have = new Set(stored.map((i) => i.title.toLowerCase()));
+  const peeked = hubSuggestions()
+    .filter((s) => !have.has(s.title.toLowerCase()))
+    .map(peekSuggestion);
+  const suggestions = peeked.map((p) => p.item);
+  const cold = peeked.filter((p) => !p.hit).map((p) => p.item);
+  if (cold.length && tmdbEnabled()) {
+    pending += cold.length;
+    warmSuggestions(cold);
+  }
+  return NextResponse.json({ user: stored, suggestions, notInterested: notInterestedItems(), pending });
 }
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const items = readUserList();
-  const idx = (title: string) =>
-    items.findIndex((i) => i.title.toLowerCase() === String(title).toLowerCase());
+  const idx = (title: string) => items.findIndex((i) => i.title.toLowerCase() === String(title).toLowerCase());
 
   if (body.action === "add") {
-    if (!body.title)
-      return NextResponse.json({ error: "missing title" }, { status: 400 });
+    if (!body.title) return NextResponse.json({ error: "missing title" }, { status: 400 });
     // invariant: every watchlist entry carries Louie's projected score
     if (typeof body.predicted !== "string" || !/^\d+(?:-\d+)?$/.test(body.predicted))
       return NextResponse.json(
@@ -61,8 +85,7 @@ export async function POST(request: NextRequest) {
       writeUserList(items);
     }
   } else if (body.action === "snooze") {
-    if (!body.title)
-      return NextResponse.json({ error: "missing title" }, { status: 400 });
+    if (!body.title) return NextResponse.json({ error: "missing title" }, { status: 400 });
     snoozeTitle(String(body.title));
   } else if (body.action === "move") {
     const i = idx(body.title);

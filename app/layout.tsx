@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import PwaRegister from "@/components/PwaRegister";
+import { PAGE_BACKGROUND } from "@/lib/theme";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,7 +25,7 @@ export const metadata: Metadata = {
 // mobile bottom nav and chat input can pad around them; theme-color tints the
 // mobile browser chrome to match the dark-warm theater background.
 export const viewport: Viewport = {
-  themeColor: "#0c0a08",
+  themeColor: PAGE_BACKGROUND,
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",

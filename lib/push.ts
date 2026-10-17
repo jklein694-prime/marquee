@@ -4,24 +4,17 @@
 // subscriptions live in data/push.json. iOS delivers these only to the
 // home-screen app, over HTTPS (see host-mode.sh).
 import fs from "fs";
-import path from "path";
 import webpush, { type PushSubscription } from "web-push";
 import { onTurnFinished, type Turn } from "./turns";
-
-const KEYS = path.join(process.cwd(), "data/vapid.json");
-const SUBS = path.join(process.cwd(), "data/push.json");
+import { PUSH_KEYS_FILE as KEYS, PUSH_SUBS_FILE as SUBS } from "./paths";
+import { writeJsonAtomic } from "./atomicWrite";
 
 interface Vapid {
   publicKey: string;
   privateKey: string;
 }
 
-function writeJson(file: string, data: unknown) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
-  fs.renameSync(tmp, file);
-}
+const writeJson = writeJsonAtomic;
 
 export function vapidKeys(): Vapid {
   try {

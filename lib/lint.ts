@@ -2,8 +2,8 @@ import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
 import { CATEGORY_DIRS, HUB, MOVIES_DIR, TASTE_DIR, mdFiles, wikilinks } from "./vault";
-
-const REPORT = path.join(process.cwd(), "data/lint-pending.txt");
+import { LINT_REPORT_FILE as REPORT } from "./paths";
+import { writeTextAtomic } from "./atomicWrite";
 
 // mechanical, deterministic fixes applied in place; returns what was fixed
 // ponytail: hub-only, wikilink syntax only — widen scope when the report shows
@@ -17,7 +17,7 @@ export function autofixVault(): string[] {
     // unclosed wikilink: [[Foo] → [[Foo]]
     .replace(/\[\[([^\][\n]+)\](?!\])/g, "[[$1]]");
   if (after === before) return [];
-  fs.writeFileSync(HUB, after);
+  writeTextAtomic(HUB, after);
   return ["hub: normalized malformed wikilink syntax"];
 }
 
@@ -120,8 +120,7 @@ function lintIndexes(): string[] {
 }
 
 export function writeLintReport(issues: string[]) {
-  fs.mkdirSync(path.dirname(REPORT), { recursive: true });
-  if (issues.length) fs.writeFileSync(REPORT, issues.join("\n"));
+  if (issues.length) writeTextAtomic(REPORT, issues.join("\n"));
   else fs.rmSync(REPORT, { force: true });
 }
 

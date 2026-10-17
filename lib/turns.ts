@@ -11,8 +11,7 @@ import { autofixVault, consumeLintReport, lintVault, writeLintReport } from "./l
 import { activeSnoozes } from "./watchlist";
 import { chatEngine } from "./engine";
 import type { TurnEvent } from "./engine/types";
-
-const DIR = path.join(process.cwd(), "data/turns");
+import { TURNS_DIR as DIR } from "./paths";
 const KEEP_LIVE_MS = 30 * 60 * 1000; // done turns stay in memory this long
 const KEEP_DISK_MS = 7 * 24 * 60 * 60 * 1000;
 

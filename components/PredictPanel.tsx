@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { GraphNode, GraphLink } from "@/lib/vault";
 import {
@@ -13,6 +13,10 @@ import {
   pinNodes,
 } from "./useHeatEngine";
 import { TitleSearch, type SearchResult } from "./QuickRate";
+import { graphPalette } from "@/lib/theme";
+import { Poster } from "./Poster";
+import { Button } from "./ui";
+import { useGraph } from "@/lib/graphClient";
 
 const Graph3D = dynamic(() => import("./Graph3D"), { ssr: false });
 
@@ -52,13 +56,11 @@ type PredictEvent =
   | { type: "error"; message?: string }
   | { type: "done" };
 
-export default function PredictPanel() {
+function PredictPanel({ version, active = true }: { version: number; active?: boolean }) {
   const [phase, setPhase] = useState<Phase>("search");
   const [picked, setPicked] = useState<SearchResult | null>(null);
-  const [graph, setGraph] = useState<{ nodes: GraphNode[]; links: GraphLink[] }>({
-    nodes: [],
-    links: [],
-  });
+  // the shared graph copy; only fetched once this panel is actually shown
+  const graph = useGraph(version, active);
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [onList, setOnList] = useState(false);
   const [status, setStatus] = useState("");
@@ -95,17 +97,9 @@ export default function PredictPanel() {
       const a = heatEmptyRef.current ? 0.3 + 0.12 * Math.sin(Date.now() / 250) : 0.35;
       return `rgba(${r},${g},${b},${a})`;
     },
-    coldLink: (l) =>
-      (l as { ghost?: boolean }).ghost ? "rgba(232,220,200,0.3)" : "#2a221a",
+    coldLink: (l) => ((l as { ghost?: boolean }).ghost ? graphPalette().edgeGhost : graphPalette().edge),
   });
   heatEmptyRef.current = engine.heatRef.current.size === 0;
-
-  useEffect(() => {
-    fetch("/api/graph")
-      .then((r) => r.json())
-      .then(setGraph)
-      .catch(() => {});
-  }, []);
 
   // the graph container only exists past the search phase, so re-attach on
   // change; ignore the 0x0 readings while the panel is hidden (display: none)
@@ -292,10 +286,10 @@ export default function PredictPanel() {
 
   if (phase === "search") {
     return (
-      <div className="h-full space-y-4 overflow-y-auto px-5 py-4">
+      <div className="h-full space-y-4 overflow-y-auto px-4 py-4 md:px-5">
         <div>
-          <div className="mb-1.5 text-sm font-medium text-glow">Screen Test</div>
-          <div className="mb-2 text-xs text-muted">
+          <h2 className="mb-1 text-base font-medium text-fg md:text-sm">Screen Test</h2>
+          <div className="mb-2 text-sm text-muted md:text-xs">
             Search any movie or show and Louie screens it against your taste
             graph — watch the reasoning light up, then get his projected rating.
           </div>
@@ -310,10 +304,11 @@ export default function PredictPanel() {
       {graph.nodes.length > 0 && (
         <Graph3D
           fgRef={engine.fgRef}
+          paused={!active}
           width={size.width}
           height={size.height}
           graphData={liveData}
-          backgroundColor="#0c0a08"
+          backgroundColor={graphPalette().background}
           controlType="orbit"
           showNavInfo={false}
           enableNodeDrag={false}
@@ -322,34 +317,24 @@ export default function PredictPanel() {
       )}
 
       {picked && (
-        <div className="absolute left-3 top-3 z-10 flex items-center gap-3 rounded-lg border border-card-border bg-card/90 p-2 pr-3 backdrop-blur-sm">
-          {picked.poster_path && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={`https://image.tmdb.org/t/p/w92${picked.poster_path}`}
-              alt={picked.title}
-              className="h-12 w-8 rounded object-cover"
-            />
-          )}
-          <div className="min-w-0">
-            <div className="text-xs font-medium">
+        <div className="absolute left-2 right-2 top-2 z-10 flex items-center gap-3 rounded-lg border border-border bg-surface-1/90 p-2 pr-1 backdrop-blur-sm md:left-3 md:right-auto md:top-3 md:pr-2">
+          <Poster path={picked.poster_path} alt="" width={32} height={48} className="h-12 w-8 rounded" eager />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium md:text-xs">
               {phase === "thinking" && "Screening "}
               {picked.title}
               {picked.year && <span className="text-muted"> ({picked.year})</span>}
             </div>
             {phase === "thinking" && (
-              <div className="text-[11px] text-muted">
-                <span className="animate-pulse text-glow">●</span> {status}
+              <div className="text-xs text-muted">
+                <span className="animate-pulse text-accent">●</span> {status}
               </div>
             )}
           </div>
           {phase === "thinking" && (
-            <button
-              onClick={reset}
-              className="ml-1 text-xs text-muted hover:text-foreground"
-            >
-              cancel
-            </button>
+            <Button variant="ghost" onClick={reset}>
+              Cancel
+            </Button>
           )}
         </div>
       )}
@@ -358,22 +343,15 @@ export default function PredictPanel() {
 
       {phase === "done" && verdict && picked && (
         <div className="absolute inset-0 z-20 flex items-center justify-center p-6">
-          <div className="max-h-full w-96 max-w-full overflow-y-auto rounded-lg border border-card-border bg-card/95 p-5 backdrop-blur-sm">
+          <div className="max-h-full w-96 max-w-full overflow-y-auto rounded-lg border border-border bg-surface-1/95 p-5 backdrop-blur-sm">
             <div className="flex gap-4">
-              {picked.poster_path && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={`https://image.tmdb.org/t/p/w185${picked.poster_path}`}
-                  alt={picked.title}
-                  className="h-36 w-24 shrink-0 rounded object-cover"
-                />
-              )}
+              <Poster path={picked.poster_path} alt="" width={96} height={144} className="h-36 w-24 shrink-0 rounded" eager />
               <div className="min-w-0">
                 <div className="text-sm font-medium leading-tight">
                   {picked.title}
                   {picked.year && <span className="text-muted"> ({picked.year})</span>}
                 </div>
-                <div className="mt-2 text-2xl font-semibold text-glow">
+                <div className="mt-2 text-2xl font-semibold text-accent">
                   {verdict.seen
                     ? `You rated it ${verdict.actual}/10`
                     : `Louie predicts ${verdict.predicted.replace("-", "–")}`}
@@ -383,23 +361,16 @@ export default function PredictPanel() {
             <div className="mt-3 text-sm">{verdict.why}</div>
             <div className="mt-4 flex items-center gap-2">
               {!verdict.seen && !onList && (
-                <button
-                  onClick={addToWatchlist}
-                  disabled={added !== "no"}
-                  className="rounded-md bg-glow/15 px-3 py-1.5 text-xs text-glow hover:bg-glow/25 disabled:opacity-60"
-                >
+                <Button variant="primary" onClick={addToWatchlist} disabled={added !== "no"}>
                   {added === "yes" ? "Added." : added === "saving" ? "Adding…" : "+ My watchlist"}
-                </button>
+                </Button>
               )}
               {!verdict.seen && onList && (
-                <span className="text-xs text-muted">Already on your watchlist</span>
+                <span className="text-sm text-muted md:text-xs">Already on your watchlist</span>
               )}
-              <button
-                onClick={reset}
-                className="rounded-md px-3 py-1.5 text-xs text-muted hover:text-glow"
-              >
+              <Button variant="ghost" onClick={reset}>
                 Search another
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -407,22 +378,16 @@ export default function PredictPanel() {
 
       {phase === "error" && picked && (
         <div className="absolute inset-0 z-20 flex items-center justify-center p-6">
-          <div className="w-96 max-w-full rounded-lg border border-card-border bg-card/95 p-5 backdrop-blur-sm">
-            <div className="text-sm font-medium text-ember">The screening broke down</div>
+          <div className="w-96 max-w-full rounded-lg border border-border bg-surface-1/95 p-5 backdrop-blur-sm">
+            <div className="text-sm font-medium text-danger">The screening broke down</div>
             <div className="mt-1 break-words text-xs text-muted">{errorMsg}</div>
             <div className="mt-4 flex gap-2">
-              <button
-                onClick={() => start(picked)}
-                className="rounded-md bg-glow/15 px-3 py-1.5 text-xs text-glow hover:bg-glow/25"
-              >
+              <Button variant="primary" onClick={() => start(picked)}>
                 Try again
-              </button>
-              <button
-                onClick={reset}
-                className="rounded-md px-3 py-1.5 text-xs text-muted hover:text-glow"
-              >
+              </Button>
+              <Button variant="ghost" onClick={reset}>
                 Search another
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -430,3 +395,5 @@ export default function PredictPanel() {
     </div>
   );
 }
+
+export default memo(PredictPanel);

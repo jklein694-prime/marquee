@@ -1,8 +1,9 @@
 import fs from "fs";
-import path from "path";
 import matter from "gray-matter";
 import { HUB, WIKILINK, wikilinks } from "./vault";
 import { details, searchMulti, Media } from "./tmdb";
+import { SNOOZE_FILE, WATCHLIST_FILE as FILE } from "./paths";
+import { writeJsonAtomic } from "./atomicWrite";
 
 export interface WatchItem {
   title: string;
@@ -19,8 +20,6 @@ export interface WatchItem {
   verifiedAt?: number;
 }
 
-const FILE = path.join(process.cwd(), "data/watchlist.json");
-const SNOOZE_FILE = path.join(process.cwd(), "data/snoozed.json");
 const SNOOZE_MS = 14 * 24 * 60 * 60 * 1000;
 
 // snoozed suggestions: lowercased title → expiry epoch-ms; expired entries are
@@ -32,7 +31,7 @@ function readSnoozes(): Record<string, number> {
     const now = Date.now();
     const live = Object.fromEntries(Object.entries(all).filter(([, t]) => t > now));
     if (Object.keys(live).length !== Object.keys(all).length)
-      fs.writeFileSync(SNOOZE_FILE, JSON.stringify(live, null, 2));
+      writeJsonAtomic(SNOOZE_FILE, live);
     return live;
   } catch {
     return {};
@@ -81,8 +80,7 @@ export function notInterested(): string[] {
 export function snoozeTitle(title: string) {
   const snoozes = readSnoozes();
   snoozes[title.toLowerCase()] = Date.now() + SNOOZE_MS;
-  fs.mkdirSync(path.dirname(SNOOZE_FILE), { recursive: true });
-  fs.writeFileSync(SNOOZE_FILE, JSON.stringify(snoozes, null, 2));
+  writeJsonAtomic(SNOOZE_FILE, snoozes);
 }
 
 export function readUserList(): WatchItem[] {
@@ -91,8 +89,7 @@ export function readUserList(): WatchItem[] {
 }
 
 export function writeUserList(items: WatchItem[]) {
-  fs.mkdirSync(path.dirname(FILE), { recursive: true });
-  fs.writeFileSync(FILE, JSON.stringify(items, null, 2));
+  writeJsonAtomic(FILE, items);
 }
 
 // the hub's "## Watchlist" section is the agent-managed suggestion list
@@ -133,10 +130,6 @@ export function hubSuggestions(): WatchItem[] {
 // real scheduler — good enough for a single-user local app; add a cron/queue
 // if this ever needs to run without the tab open
 const VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
-
-function titleOf(name: string, year?: number): string {
-  return year ? `${name} (${year})` : name;
-}
 
 // resolves a title to the right TMDB entry: search matches movies and tv
 // together and are relevance-ranked, not identity-ranked, so an unrelated
@@ -205,6 +198,31 @@ export async function enrichCached(item: WatchItem): Promise<WatchItem> {
   const out = await enrich(item);
   if (out.verifiedAt) suggestionCache.set(key, { item: out, at: Date.now() });
   return out;
+}
+
+/** Posters, streaming and trailers need a TMDB key; without one, lists render bare. */
+export const tmdbEnabled = () => !!process.env.TMDB_API_KEY;
+
+/** The memoized enrichment if there is one, else the bare hub item (never waits on TMDB). */
+export function peekSuggestion(item: WatchItem): { item: WatchItem; hit: boolean } {
+  const hit = suggestionCache.get(item.title.toLowerCase());
+  if (hit && Date.now() - hit.at < VERIFY_TTL_MS)
+    return { item: { ...hit.item, note: item.note, predicted: item.predicted }, hit: true };
+  return { item, hit: false };
+}
+
+// background warm-up for suggestions the memo does not have yet; one TMDB
+// pass per title at a time, however many requests ask meanwhile
+const warming = new Set<string>();
+export function warmSuggestions(items: WatchItem[]) {
+  for (const item of items) {
+    const key = item.title.toLowerCase();
+    if (warming.has(key)) continue;
+    warming.add(key);
+    void enrichCached(item)
+      .catch(() => {})
+      .finally(() => warming.delete(key));
+  }
 }
 
 // re-enriches anything never verified or older than the TTL; returns the

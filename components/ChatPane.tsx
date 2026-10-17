@@ -1,51 +1,10 @@
 "use client";
 
-import { MutableRefObject, useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { WIKILINK } from "@/lib/wikilink";
+import { MutableRefObject, useCallback, useEffect, useRef, useState } from "react";
+import { Markdown, ThrottledMarkdown } from "./Markdown";
 import { OptionPicker, MovieCards, MovieChecklist, OptionsData, RecsData, ChecklistData } from "./Widgets";
 import { clearChat, followTurn, loadChat, saveChat, startTurn, stopTurn, type ClientTurnEvent } from "@/lib/turnClient";
-
-export function Markdown({ text }: { text: string }) {
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        p: (p) => <p className="my-1.5 first:mt-0 last:mb-0" {...p} />,
-        strong: (p) => <strong className="font-semibold text-glow" {...p} />,
-        h1: (p) => <div className="mt-2 font-semibold text-glow" {...p} />,
-        h2: (p) => <div className="mt-2 font-semibold text-glow" {...p} />,
-        h3: (p) => <div className="mt-2 font-semibold text-glow" {...p} />,
-        h4: (p) => <div className="mt-2 font-semibold text-glow" {...p} />,
-        hr: () => <hr className="my-2 border-card-border" />,
-        ul: (p) => <ul className="my-1.5 list-disc space-y-1 pl-5" {...p} />,
-        ol: (p) => <ol className="my-1.5 list-decimal space-y-1 pl-5" {...p} />,
-        a: (p) => <a className="text-glow underline" target="_blank" {...p} />,
-        code: (p) => <code className="rounded bg-background px-1 font-mono text-[0.9em]" {...p} />,
-        pre: (p) => (
-          <pre
-            className="my-1.5 overflow-x-auto rounded-lg border border-card-border bg-background p-2.5 text-xs [&_code]:bg-transparent [&_code]:p-0"
-            {...p}
-          />
-        ),
-        img: (p) => <img className="my-1.5 max-w-full rounded-lg" {...p} />,
-        blockquote: (p) => <blockquote className="border-l-2 border-glow/40 pl-3 text-muted" {...p} />,
-        table: (p) => (
-          <div className="my-1.5 overflow-x-auto">
-            <table className="w-full border-collapse text-xs" {...p} />
-          </div>
-        ),
-        th: (p) => (
-          <th className="border-b border-card-border px-2 py-1 text-left font-semibold text-glow" {...p} />
-        ),
-        td: (p) => <td className="border-b border-card-border/50 px-2 py-1 align-top" {...p} />,
-      }}
-    >
-      {text.replace(WIKILINK, "$1")}
-    </ReactMarkdown>
-  );
-}
+import { Button } from "./ui";
 
 type Msg =
   | { role: "user" | "assistant"; text: string }
@@ -86,7 +45,8 @@ function activityLabel(t: { kind: string; sub?: boolean; label: string }): strin
   return "working…";
 }
 
-// rotated in the busy bar while the expert thinks
+// rotated in the busy bar while the expert thinks (desktop only — a phone
+// has no room for it)
 const TIPS = [
   "log what you watched from the Watchlist tab — even mid-chat, it queues up",
   "hit Not now on a suggestion to shelve it for a couple of weeks",
@@ -105,7 +65,10 @@ function LouieHero() {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/louie.svg").then((r) => r.text()).then(setSvg).catch(() => {});
+    fetch("/louie.svg")
+      .then((r) => r.text())
+      .then(setSvg)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -115,8 +78,12 @@ function LouieHero() {
 
     const polys = [...svgEl.querySelectorAll("polygon")].map((p) => {
       const nums = (p.getAttribute("points") ?? "").split(/[ ,]/).map(Number);
-      let cx = 0, cy = 0;
-      for (let i = 0; i < 6; i += 2) { cx += nums[i]; cy += nums[i + 1]; }
+      let cx = 0,
+        cy = 0;
+      for (let i = 0; i < 6; i += 2) {
+        cx += nums[i];
+        cy += nums[i + 1];
+      }
       const base = Number((p.getAttribute("fill") ?? "").match(/\d+/)?.[0] ?? 0);
       return { el: p, cx: cx / 3, cy: cy / 3, base };
     });
@@ -173,9 +140,11 @@ function LouieHero() {
   }, [svg]);
 
   return (
+    // capped by viewport height so the welcome card and input stay on the
+    // first screen of a phone
     <div
       ref={ref}
-      className="mx-auto mb-4 w-64"
+      className="mx-auto mb-3 w-[min(16rem,28dvh)] [&>svg]:h-auto [&>svg]:w-full"
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );
@@ -186,13 +155,21 @@ export default function ChatPane({
   onTrace,
   onOpenHelp,
   onWatchGraph,
+  onInputFocusChange,
+  onConversationChange,
   sendRef,
+  newChatRef,
 }: {
   onTurnEnd: () => void;
   onTrace: (t: TraceEntry) => void;
   onOpenHelp?: () => void;
   onWatchGraph?: () => void;
+  onInputFocusChange?: (focused: boolean) => void;
+  /** true while there is a transcript to clear: the header shows New chat */
+  onConversationChange?: (hasMessages: boolean) => void;
   sendRef?: MutableRefObject<ChatSend>;
+  /** the header's New chat button calls this */
+  newChatRef?: MutableRefObject<() => void>;
 }) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -216,6 +193,33 @@ export default function ChatPane({
   const logSessionRef = useRef<string | undefined>(undefined);
   const logBusyRef = useRef(false);
   const logQueueRef = useRef<{ text: string; onDone?: () => void; tag?: string }[]>([]);
+  // streamed text is appended once per animation frame, not once per token:
+  // a long reply arrives as hundreds of deltas and each setMessages used to
+  // re-render (and re-parse) the whole transcript
+  const deltaBufRef = useRef("");
+  const deltaRafRef = useRef(0);
+  const flushDeltas = useCallback(() => {
+    if (deltaRafRef.current) cancelAnimationFrame(deltaRafRef.current);
+    deltaRafRef.current = 0;
+    const delta = deltaBufRef.current;
+    if (!delta) return;
+    deltaBufRef.current = "";
+    setMessages((m) => {
+      const next = [...m];
+      // append to the last assistant bubble, or open a new one after a widget
+      const last = next[next.length - 1];
+      if (last?.role === "assistant") next[next.length - 1] = { role: "assistant", text: last.text + delta };
+      else next.push({ role: "assistant", text: delta });
+      return next;
+    });
+  }, []);
+  const queueDelta = useCallback(
+    (delta: string) => {
+      deltaBufRef.current += delta;
+      if (!deltaRafRef.current) deltaRafRef.current = requestAnimationFrame(flushDeltas);
+    },
+    [flushDeltas]
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
@@ -265,25 +269,6 @@ export default function ChatPane({
     const id = setInterval(() => setTipIdx((i) => (i + 1) % TIPS.length), 6000);
     return () => clearInterval(id);
   }, [busy]);
-
-  const send: ChatSend = (text, onDone, opts) => {
-    if (!text.trim()) return false;
-    if (opts?.silent) {
-      if (logBusyRef.current) {
-        logQueueRef.current.push({ text, onDone, tag: opts.tag });
-        return "queued";
-      }
-      void run(text, onDone, true, opts.tag);
-      return "sent";
-    }
-    if (busyRef.current || restoringRef.current) {
-      queueRef.current.push({ text, onDone });
-      return "queued";
-    }
-    void run(text, onDone);
-    return "sent";
-  };
-  if (sendRef) sendRef.current = send;
 
   // existing: attach to a turn that is already running/finished (restoring the
   // transcript after a reload) instead of starting one. replay: an earlier,
@@ -345,29 +330,16 @@ export default function ChatPane({
           // live generation status (thinking…, preparing Edit…) — fills the
           // long silent stretches between trace lines. Chat lane only: the
           // busy strip belongs to the chat; background logs stay invisible.
-          if (!silent)
-            setActivity(ev.label ? `${ev.label}${ev.detail ? ` ${ev.detail}` : ""}` : "working…");
+          if (!silent) setActivity(ev.label ? `${ev.label}${ev.detail ? ` ${ev.detail}` : ""}` : "working…");
         } else if (ev.type === "text") {
-          setMessages((m) => {
-            const next = [...m];
-            // append to the last assistant bubble, or open a new one after a widget
-            const last = next[next.length - 1];
-            const delta = String(ev.delta ?? "");
-            if (last?.role === "assistant") {
-              next[next.length - 1] = { role: "assistant", text: last.text + delta };
-            } else {
-              next.push({ role: "assistant", text: delta });
-            }
-            return next;
-          });
+          queueDelta(String(ev.delta ?? ""));
         } else if (ev.type === "widget") {
+          flushDeltas(); // keep text before the widget it precedes
           setMessages((m) => {
             // drop duplicate widget re-calls within the same turn
             const dup = m.some(
               (msg) =>
-                msg.role === "widget" &&
-                msg.widget === ev.widget &&
-                JSON.stringify(msg.data) === JSON.stringify(ev.data)
+                msg.role === "widget" && msg.widget === ev.widget && JSON.stringify(msg.data) === JSON.stringify(ev.data)
             );
             if (dup) return m;
             const w: Msg =
@@ -386,6 +358,7 @@ export default function ChatPane({
             if (label) setActivity(label);
           }
         } else if (ev.type === "done") {
+          flushDeltas();
           const sid = ev.sessionId as string | undefined;
           if (silent) logSessionRef.current = sid ?? logSessionRef.current;
           else {
@@ -410,6 +383,7 @@ export default function ChatPane({
         });
       }
     } finally {
+      flushDeltas();
       onDone?.();
       if (!replay) onTurnEnd();
       if (silent) {
@@ -436,46 +410,52 @@ export default function ChatPane({
     }
   }
 
+  const send: ChatSend = (text, onDone, opts) => {
+    if (!text.trim()) return false;
+    if (opts?.silent) {
+      if (logBusyRef.current) {
+        logQueueRef.current.push({ text, onDone, tag: opts.tag });
+        return "queued";
+      }
+      void run(text, onDone, true, opts.tag);
+      return "sent";
+    }
+    if (busyRef.current || restoringRef.current) {
+      queueRef.current.push({ text, onDone });
+      return "queued";
+    }
+    void run(text, onDone);
+    return "sent";
+  };
+  // published after commit so a parent never calls a stale closure mid-render
+  useEffect(() => {
+    if (sendRef) sendRef.current = send;
+    if (newChatRef) newChatRef.current = newChat;
+  });
+  const hasMessages = messages.length > 0;
+  useEffect(() => {
+    onConversationChange?.(hasMessages);
+  }, [hasMessages, onConversationChange]);
+
   return (
     <>
-      <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
-        {messages.length > 0 && !busy && (
-          <div className="flex justify-end">
-            <button
-              onClick={newChat}
-              className="cursor-pointer rounded border border-card-border px-2 py-0.5 text-[11px] text-muted hover:border-glow/60 hover:text-glow"
-            >
-              New chat
-            </button>
-          </div>
-        )}
+      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4 md:px-5">
         {messages.length === 0 && (
-          <div className="mx-auto mt-10 max-w-sm text-center">
+          <div className="mx-auto mt-4 max-w-sm text-center md:mt-10">
             <LouieHero />
-            <div className="text-sm text-muted">
-              Ask for a recommendation, or tell me what you watched.
-            </div>
+            <div className="text-sm text-muted">Ask for a recommendation, or tell me what you watched.</div>
             <button
-              onClick={() =>
-                send("Take me through a guided session to find something to watch.")
-              }
-              className="mt-6 w-full cursor-pointer rounded-lg border border-glow/40 bg-card px-5 py-4 text-left transition-colors hover:border-glow hover:bg-glow/10"
+              onClick={() => send("Take me through a guided session to find something to watch.")}
+              className="mt-5 w-full rounded-lg border border-accent-border bg-surface-1 px-5 py-4 text-left transition-colors hover:border-accent hover:bg-accent-subtle"
             >
-              <div className="text-sm font-medium text-glow">Find me something to watch</div>
-              <div className="mt-1 text-xs text-muted">
-                A few quick questions, then picks tuned to your taste
-              </div>
+              <div className="text-base font-medium text-accent md:text-sm">Find me something to watch</div>
+              <div className="mt-1 text-sm text-muted md:text-xs">A few quick questions, then picks tuned to your taste</div>
             </button>
-            <div className="mt-4 text-xs text-muted opacity-70">
-              or just type — &ldquo;I watched Heat, loved it&rdquo;
-            </div>
+            <div className="mt-3 text-xs text-muted">or just type — &ldquo;I watched Heat, loved it&rdquo;</div>
             {onOpenHelp && (
-              <button
-                onClick={onOpenHelp}
-                className="mt-5 text-xs text-muted underline decoration-dotted underline-offset-4 hover:text-glow"
-              >
+              <Button variant="ghost" size="sm" className="mt-2 underline decoration-dotted underline-offset-4" onClick={onOpenHelp}>
                 New here? Start with Help
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -490,48 +470,60 @@ export default function ChatPane({
             );
           if (msg.role === "user")
             return (
-              <div key={i} className="ml-12 break-words rounded-lg border border-glow/25 bg-glow/10 px-3.5 py-2.5 text-sm">
+              <div
+                key={i}
+                className="ml-8 break-words rounded-lg border border-accent-border bg-accent-subtle px-3.5 py-2.5 text-[15px] leading-relaxed md:ml-12 md:text-sm"
+              >
                 {msg.text}
               </div>
             );
+          // the bubble still streaming re-parses on a throttle; finished ones are memoized
+          const live = busy && i === messages.length - 1;
           return (
-            <div key={i} className="mr-6 break-words rounded-lg border border-card-border bg-card px-3.5 py-2.5 text-sm leading-relaxed">
-              {msg.text ? <Markdown text={msg.text} /> : <span className="animate-pulse text-muted">thinking…</span>}
+            <div
+              key={i}
+              className="mr-2 break-words rounded-lg border border-border bg-surface-1 px-3.5 py-2.5 text-[15px] leading-relaxed md:mr-6 md:text-sm"
+            >
+              {msg.text ? (
+                live ? (
+                  <ThrottledMarkdown text={msg.text} />
+                ) : (
+                  <Markdown text={msg.text} />
+                )
+              ) : (
+                <span className="animate-pulse text-muted">thinking…</span>
+              )}
             </div>
           );
         })}
         <div ref={bottomRef} />
       </div>
       {busy && (
-        <div className="flex items-center gap-2.5 border-t border-card-border bg-[#12100d] px-5 py-2">
-          <span className="relative flex h-2.5 w-2.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-glow opacity-60" />
-            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-glow" />
+        <div className="flex items-center gap-2 border-t border-border bg-surface-1 px-3 py-1.5 md:px-5">
+          <span className="relative flex h-2.5 w-2.5 shrink-0">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent" />
           </span>
-          <span className="text-xs text-glow/90">{activity}</span>
-          <button
+          <span className="min-w-0 flex-1 truncate text-xs text-accent">{activity}</span>
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => {
               if (currentTurnRef.current) void stopTurn(currentTurnRef.current);
             }}
-            className="cursor-pointer rounded border border-card-border px-2 py-0.5 text-[11px] text-muted hover:border-glow/60 hover:text-glow"
           >
             Stop
-          </button>
+          </Button>
           {onWatchGraph && (
-            <button
-              onClick={onWatchGraph}
-              className="cursor-pointer rounded border border-card-border px-2 py-0.5 text-[11px] text-muted hover:border-glow/60 hover:text-glow"
-            >
+            <Button variant="secondary" size="sm" onClick={onWatchGraph}>
               Watch the graph
-            </button>
+            </Button>
           )}
-          <span className="ml-auto min-w-0 truncate pl-3 text-[11px] text-muted">
-            tip: {TIPS[tipIdx]}
-          </span>
+          <span className="hidden min-w-0 max-w-[40%] truncate pl-3 text-xs text-muted lg:inline">tip: {TIPS[tipIdx]}</span>
         </div>
       )}
       <form
-        className="flex gap-2 border-t border-card-border bg-[#12100d] p-4"
+        className="flex gap-2 border-t border-border bg-surface-1 p-3 md:p-4"
         onSubmit={(e) => {
           e.preventDefault();
           const t = input;
@@ -542,17 +534,16 @@ export default function ChatPane({
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onFocus={() => onInputFocusChange?.(true)}
+          onBlur={() => onInputFocusChange?.(false)}
           placeholder={busy ? "the expert is working — messages queue up…" : "Talk movies & shows…"}
+          aria-label="Message"
           // text-base (16px) on mobile stops iOS from auto-zooming on focus; desktop keeps 14px
-          className="flex-1 rounded-md border border-[#3a2f22] bg-[#1c1713] px-3 py-2 text-base outline-none placeholder:text-muted focus:border-glow/60 disabled:opacity-60 md:text-sm"
+          className="min-h-11 min-w-0 flex-1 rounded-md border border-border-strong bg-surface-2 px-3 text-base outline-none placeholder:text-muted focus:border-accent-border md:text-sm"
         />
-        <button
-          type="submit"
-          disabled={!input.trim()}
-          className="rounded-md border border-glow/60 px-4 py-2 text-sm text-glow hover:bg-glow/10 disabled:opacity-40"
-        >
+        <Button type="submit" variant="primary" size="md" disabled={!input.trim()}>
           Send
-        </button>
+        </Button>
       </form>
     </>
   );

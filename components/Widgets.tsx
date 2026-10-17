@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { Poster } from "./Poster";
+import { Button, RatingGrid } from "./ui";
 
 export interface OptionsData {
   title: string;
@@ -25,6 +27,9 @@ export interface RecsData {
     poster_path?: string;
   }[];
 }
+
+const STEER_INPUT =
+  "mt-3 min-h-11 w-full rounded-md border border-border bg-surface-0 px-3 text-base outline-none placeholder:text-muted focus:border-accent-border md:min-h-9 md:text-sm";
 
 export function OptionPicker({
   data,
@@ -62,23 +67,22 @@ export function OptionPicker({
   };
 
   return (
-    <div className={`rounded-lg border border-card-border bg-card p-4 ${answered ? "opacity-60" : ""}`}>
-      <div className="mb-1 text-sm font-medium text-glow">{data.title}</div>
-      {data.context && <div className="mb-2 text-xs text-muted">{data.context}</div>}
+    <div className={`rounded-lg border border-border bg-surface-1 p-4 ${answered ? "opacity-60" : ""}`}>
+      <div className="mb-1 text-base font-medium text-accent md:text-sm">{data.title}</div>
+      {data.context && <div className="mb-2 text-sm text-muted md:text-xs">{data.context}</div>}
       <div className="flex flex-col gap-2">
         {data.options.map((o) => (
           <button
             key={o.id}
             disabled={inert}
+            aria-pressed={data.mode === "multi" ? picked.has(o.label) : undefined}
             onClick={() => toggle(o.label)}
-            className={`w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors ${
-              picked.has(o.label)
-                ? "border-glow bg-glow/20 text-glow"
-                : "border-card-border bg-transparent text-foreground"
-            } ${locked && !answered ? "cursor-wait opacity-50" : answered ? "cursor-default" : "cursor-pointer hover:border-glow/60"}`}
+            className={`min-h-11 w-full rounded-lg border px-4 py-3 text-left text-[15px] transition-colors md:text-sm ${
+              picked.has(o.label) ? "border-accent bg-accent-muted text-accent" : "border-border bg-transparent text-fg"
+            } ${locked && !answered ? "cursor-wait opacity-50" : answered ? "cursor-default" : "cursor-pointer hover:border-accent-border"}`}
           >
             <div className="font-medium">{o.label}</div>
-            {o.sublabel && <div className="mt-1 text-xs text-muted">{o.sublabel}</div>}
+            {o.sublabel && <div className="mt-1 text-sm text-muted md:text-xs">{o.sublabel}</div>}
           </button>
         ))}
       </div>
@@ -89,22 +93,15 @@ export function OptionPicker({
             onChange={(e) => setComment(e.target.value)}
             disabled={locked}
             placeholder="Anything else? Steer me… (optional)"
-            className="mt-3 w-full rounded-md border border-card-border bg-background px-2 py-1.5 text-xs outline-none placeholder:text-muted focus:border-glow/60"
+            aria-label="Steer me"
+            className={STEER_INPUT}
           />
-          <button
-            onClick={confirm}
-            disabled={(!picked.size && !comment.trim()) || locked}
-            className="mt-2 rounded-md border border-glow/60 px-3 py-1 text-sm text-glow hover:bg-glow/10 disabled:opacity-40"
-          >
+          <Button variant="primary" size="md" className="mt-2" onClick={confirm} disabled={(!picked.size && !comment.trim()) || locked}>
             Confirm
-          </button>
+          </Button>
         </>
       )}
-      {locked && !answered && (
-        <div className="mt-2 animate-pulse text-xs text-muted">
-          unlocks when the expert finishes…
-        </div>
-      )}
+      {locked && !answered && <div className="mt-2 animate-pulse text-xs text-muted">unlocks when the expert finishes…</div>}
     </div>
   );
 }
@@ -125,8 +122,7 @@ export function MovieChecklist({
   const [seen, setSeen] = useState<Record<string, number | null | undefined>>({});
   const [comment, setComment] = useState("");
 
-  const label = (m: ChecklistData["movies"][number]) =>
-    m.year ? `${m.title} (${m.year})` : m.title;
+  const label = (m: ChecklistData["movies"][number]) => (m.year ? `${m.title} (${m.year})` : m.title);
 
   const submit = () => {
     const seenList = data.movies.filter((m) => seen[label(m)] !== undefined);
@@ -142,23 +138,26 @@ export function MovieChecklist({
             })
             .join("; ")
       );
-    if (unseenList.length)
-      parts.push("Haven't seen: " + unseenList.map(label).join("; "));
+    if (unseenList.length) parts.push("Haven't seen: " + unseenList.map(label).join("; "));
     if (!parts.length) parts.push("Haven't seen any of these.");
     if (comment.trim()) parts.push(comment.trim());
     onSubmit(parts.join(". "));
   };
 
   return (
-    <div className={`rounded-lg border border-card-border bg-card p-4 ${answered ? "opacity-60" : ""}`}>
-      <div className="mb-2 text-sm font-medium text-glow">{data.title}</div>
+    <div className={`rounded-lg border border-border bg-surface-1 p-4 ${answered ? "opacity-60" : ""}`}>
+      <div className="mb-2 text-base font-medium text-accent md:text-sm">{data.title}</div>
       <div className="space-y-2">
         {data.movies.map((m) => {
           const key = label(m);
           const checked = seen[key] !== undefined;
           return (
-            <div key={key} className="flex flex-wrap items-center gap-2">
-              <label className={`flex items-center gap-2 text-sm ${inert ? "" : "cursor-pointer"} ${locked && !answered ? "opacity-50" : ""}`}>
+            <div key={key} className="space-y-2">
+              <label
+                className={`flex min-h-11 items-center gap-3 text-[15px] md:min-h-9 md:text-sm ${inert ? "" : "cursor-pointer"} ${
+                  locked && !answered ? "opacity-50" : ""
+                }`}
+              >
                 <input
                   type="checkbox"
                   disabled={inert}
@@ -171,26 +170,18 @@ export function MovieChecklist({
                       return next;
                     })
                   }
-                  className="h-4 w-4 accent-[#f5b942]"
+                  className="h-5 w-5 accent-accent md:h-4 md:w-4"
                 />
                 {key}
               </label>
               {checked && (
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                    <button
-                      key={n}
-                      disabled={inert}
-                      onClick={() => setSeen((s) => ({ ...s, [key]: n }))}
-                      className={`h-9 w-9 rounded text-[11px] leading-none transition-colors md:h-6 md:w-6 ${
-                        seen[key] === n
-                          ? "bg-glow text-background font-semibold"
-                          : "border border-card-border text-muted hover:border-glow/60 hover:text-foreground"
-                      }`}
-                    >
-                      {n}
-                    </button>
-                  ))}
+                <div className="pl-8 md:pl-7">
+                  <RatingGrid
+                    value={seen[key] ?? null}
+                    disabled={inert}
+                    label={`Rating for ${key}`}
+                    onChange={(n) => setSeen((s) => ({ ...s, [key]: n }))}
+                  />
                 </div>
               )}
             </div>
@@ -204,22 +195,15 @@ export function MovieChecklist({
             onChange={(e) => setComment(e.target.value)}
             disabled={locked}
             placeholder="Anything else? Steer me… (optional)"
-            className="mt-3 w-full rounded-md border border-card-border bg-background px-2 py-1.5 text-xs outline-none placeholder:text-muted focus:border-glow/60"
+            aria-label="Steer me"
+            className={STEER_INPUT}
           />
-          <button
-            onClick={submit}
-            disabled={locked}
-            className="mt-2 rounded-md border border-glow/60 px-3 py-1 text-sm text-glow hover:bg-glow/10 disabled:opacity-40"
-          >
+          <Button variant="primary" size="md" className="mt-2" onClick={submit} disabled={locked}>
             Confirm
-          </button>
+          </Button>
         </>
       )}
-      {locked && !answered && (
-        <div className="mt-2 animate-pulse text-xs text-muted">
-          unlocks when the expert finishes…
-        </div>
-      )}
+      {locked && !answered && <div className="mt-2 animate-pulse text-xs text-muted">unlocks when the expert finishes…</div>}
     </div>
   );
 }
@@ -230,67 +214,63 @@ export function MovieCards({ data }: { data: RecsData }) {
   // queueing something you're merely curious about is not a taste signal
   const [added, setAdded] = useState<Set<string>>(new Set());
   return (
-    <div className="flex gap-3 overflow-x-auto pb-2">
-      {data.movies.map((m) => (
-        <div
-          key={`${m.title}-${m.year}`}
-          className="w-44 shrink-0 overflow-hidden rounded-lg border border-card-border bg-card"
-        >
-          {m.poster_path ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={`https://image.tmdb.org/t/p/w342${m.poster_path}`}
-              alt={m.title}
-              className="h-56 w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-56 w-full items-center justify-center bg-background text-xs text-muted">
-              no poster
-            </div>
-          )}
-          <div className="p-2.5">
-            <div className="text-sm font-medium leading-tight">
-              {m.title} <span className="text-muted">({m.year})</span>
-            </div>
-            {m.genres && (
-              <div className="mt-1 text-[11px] text-candle">{m.genres.join(" · ")}</div>
-            )}
-            <div className="mt-1 line-clamp-3 text-xs text-muted">{m.why}</div>
-            {m.streaming && (
-              <div className="mt-1.5 inline-block rounded bg-glow/15 px-1.5 py-0.5 text-[11px] text-glow">
-                {m.streaming}
+    <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:px-0">
+      {data.movies.map((m) => {
+        const key = `${m.title}-${m.year}`;
+        return (
+          <div key={key} className="w-44 shrink-0 snap-start overflow-hidden rounded-lg border border-border bg-surface-1">
+            <Poster path={m.poster_path} alt="" width={176} height={264} className="h-66 w-full" />
+            <div className="p-3">
+              <div className="text-sm font-medium leading-tight">
+                {m.title} <span className="text-muted">({m.year})</span>
               </div>
-            )}
-            <button
-              onClick={() => {
-                const key = `${m.title}-${m.year}`;
-                setAdded((a) => new Set(a).add(key));
-                fetch("/api/watchlist", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    action: "add",
-                    title: m.title,
-                    year: m.year,
-                    note: m.why,
-                    predicted: m.predicted,
-                  }),
-                })
-                  .then((r) => {
-                    // e.g. a stale tab whose card predates a required field — don't
-                    // claim success when the write was rejected
-                    if (!r.ok) setAdded((a) => { const n = new Set(a); n.delete(key); return n; });
+              {m.genres && <div className="mt-1 text-xs text-muted">{m.genres.join(" · ")}</div>}
+              <div className="mt-1 line-clamp-3 text-xs text-muted">{m.why}</div>
+              {m.streaming && (
+                <div className="mt-1.5 inline-block rounded bg-accent-muted px-1.5 py-0.5 text-xs text-accent">{m.streaming}</div>
+              )}
+              <Button
+                variant={added.has(key) ? "secondary" : "primary"}
+                className="mt-2 w-full"
+                disabled={added.has(key)}
+                onClick={() => {
+                  setAdded((a) => new Set(a).add(key));
+                  fetch("/api/watchlist", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      action: "add",
+                      title: m.title,
+                      year: m.year,
+                      note: m.why,
+                      predicted: m.predicted,
+                    }),
                   })
-                  .catch(() => setAdded((a) => { const n = new Set(a); n.delete(key); return n; }));
-              }}
-              disabled={added.has(`${m.title}-${m.year}`)}
-              className="mt-2 w-full rounded-md border border-glow/50 py-1 text-xs text-glow hover:bg-glow/10 disabled:opacity-60"
-            >
-              {added.has(`${m.title}-${m.year}`) ? "✓ on your watchlist" : "+ Watchlist"}
-            </button>
+                    .then((r) => {
+                      // e.g. a stale tab whose card predates a required field — don't
+                      // claim success when the write was rejected
+                      if (!r.ok)
+                        setAdded((a) => {
+                          const n = new Set(a);
+                          n.delete(key);
+                          return n;
+                        });
+                    })
+                    .catch(() =>
+                      setAdded((a) => {
+                        const n = new Set(a);
+                        n.delete(key);
+                        return n;
+                      })
+                    );
+                }}
+              >
+                {added.has(key) ? "On your watchlist" : "+ Watchlist"}
+              </Button>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

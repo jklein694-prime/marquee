@@ -6,8 +6,10 @@
 // chat, watchlist, taste graph, or booth work, update the matching SECTION
 // below in the same change so the guide never drifts from the app.
 
-import { Markdown } from "./ChatPane";
+import { memo } from "react";
+import { Markdown } from "./Markdown";
 import PushToggle from "./PushToggle";
+import { Chip } from "./ui";
 
 type Section = { id: string; title: string; body: string };
 
@@ -16,9 +18,9 @@ const SECTIONS: Section[] = [
     id: "welcome",
     title: "Welcome",
     body: `**Marquee** is your personal movie & TV expert, named **Louie**. You talk to
-Louie in the chat on the left; the tabs on the right (Taste Graph, Watchlist,
-Projection Booth, Help) open panels alongside it. **Close** returns the chat to
-full width.
+Louie in the chat; the other sections (Taste Graph, Watchlist, Quick Rate, Screen
+Test, Projection Booth, Help) open beside it on a desktop, or from the bottom bar
+on a phone.
 
 Louie has no conversational memory between sessions — instead it keeps a linked
 wiki of your taste that grows every time you talk. It handles **movies and TV
@@ -35,7 +37,7 @@ noticeably improve between your 5th and your 20th logged title.`,
   {
     id: "chatting",
     title: "Chatting",
-    body: `Louie is built around **clicking, not typing** — nearly every reply ends with one
+    body: `Louie is built around **tapping, not typing** — nearly every reply ends with one
 interactive widget, and you can always type instead if your answer isn't listed.
 
 - **Choice chips** — a question with tappable options. In single-choice questions,
@@ -87,7 +89,7 @@ your taste and where it's streaming.`,
     id: "profile",
     title: "Building your profile",
     body: `**This is where to start on a new wiki.** Tell Louie **"I watched X"** (or use
-**Watched it** on the Watchlist) and it records:
+**Watched it** on the Watchlist, or the **Quick Rate** section) and it records:
 
 - a row in your **Seen** ledger — your verdict (loved / liked / meh / disliked), a
   1–10 rating, and a short note;
@@ -113,16 +115,16 @@ new favorite becomes a fresh branch of your taste instead.`,
   },
   {
     id: "watchlist",
-    title: "The Watchlist tab",
+    title: "The Watchlist",
     body: `Two lists plus a filter:
 
-- **My services** (top) — uncheck the streaming services you don't pay for to hide
+- **My services** (top) — unselect the streaming services you don't pay for to hide
   picks available *only* there. It's a view filter, saved in your browser; nothing is
   deleted and titles with no streaming info always stay visible.
-- **My watchlist** — titles you've saved, ranked. **Drag** a card or use the **#
-  picker** to reorder. **Show more** expands the note, the full **synopsis**, and
-  **Louie's projected rating and why**. Each card has **Trailer**, **Watched it**, and
-  a **⋮** menu with **Remove** and **Not interested** (each with an optional reason).
+- **My watchlist** — titles you've saved, ranked. Use the **arrows** to reorder (on a
+  desktop you can also drag a card). **More** expands the note, the full **synopsis**,
+  and **Louie's projected rating and why**. Each card has **Watched it**, **Trailer**,
+  and a **⋮** menu with **Remove** and **Not interested** (each with an optional reason).
 - **Louie's suggestions** — Louie's ranked queue, reordered best-fit-first as your
   taste sharpens. Cards carry a **"Louie predicts"** score, a **+ My watchlist**
   button, and a **⋮** menu with **Not now** and **Not interested**.
@@ -150,18 +152,22 @@ doesn't.`,
   {
     id: "graph",
     title: "The Taste Graph",
-    body: `A live map of your taste that grows as you talk. Node colors:
+    body: `A live map of your taste that grows as you talk. Warm colors are your verdicts;
+the cool color is structure:
 
-- **amber** — a title you loved or liked
-- **rust red** — a title you disliked
+- **gold** — a title you loved
+- **amber** — a title you liked
 - **taupe** — a title you felt "meh" about
-- **orange** — a category page (genre, person, theme, style, platform, era, setting).
-  These are the bigger nodes.
-- **faded amber** — something on your watchlist
+- **rust** — a title you disliked
+- **dim grey** — a title with a page but no verdict yet
+- **steel blue** — a category page (genre, person, theme, style, platform, era,
+  setting). These are the bigger nodes.
+- **faded gold** — something on your watchlist
 - **cream** — a taste note (a distilled preference). These are the smallest nodes.
 
-**Click a node** to open its wiki page and light up its connections; click it again,
-or the background, to deselect.
+**Tap a node** to open its wiki page and light up its connections; tap it again,
+or the background, to deselect. The **i** button shows this legend in the graph.
+**3D** is a choice, not the default, on a phone — it costs battery.
 
 **A node with no page** doesn't mean it's broken or reserved — it means the app knows
 about it (something links to it) but no page has been written *yet*. For categories,
@@ -174,7 +180,8 @@ full pages exist only for things you've actually **seen**.`,
     body: `A live feed of everything Louie does behind the scenes — reading your wiki, writing
 updates, dispatching research assistants, and "thinking…" status while it reasons. If
 a reply takes a while, open the Booth to confirm it's working, not frozen. Blue-tinted
-"sub" lines are background research assistants; the rest is Louie itself.`,
+"sub" lines are background research assistants; the rest is Louie itself. The model
+that served the last reply is shown at the top.`,
   },
   {
     id: "good-to-know",
@@ -205,41 +212,35 @@ a reply takes a while, open the Booth to confirm it's working, not frozen. Blue-
   },
 ];
 
-export default function HelpPanel() {
+function HelpPanel() {
   // scope the lookup to this panel (ids are unique to it while mounted, but be
   // explicit) and scroll to the section header
-  const jump = (id: string) =>
-    document
-      .getElementById(`help-${id}`)
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const jump = (id: string) => document.getElementById(`help-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   return (
     <div className="flex h-full flex-col">
-      <div className="sticky top-0 z-10 flex flex-wrap gap-1 border-b border-card-border bg-background/95 px-4 py-2 backdrop-blur-sm">
+      {/* one scrolling row of chips: on a phone a wrapped nav took four rows */}
+      <nav
+        aria-label="Help sections"
+        className="scrollbar-none flex shrink-0 snap-x gap-2 overflow-x-auto border-b border-border bg-surface-0/95 px-4 py-2 backdrop-blur-sm"
+      >
         {SECTIONS.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => jump(s.id)}
-            className="rounded-md px-2.5 py-1 text-[11px] text-muted transition-colors hover:bg-glow/10 hover:text-glow"
-          >
+          <Chip key={s.id} className="snap-start" onClick={() => jump(s.id)}>
             {s.title}
-          </button>
+          </Chip>
         ))}
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+      </nav>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-5">
         <div className="mb-5">
-          <h1 className="text-lg font-semibold text-glow">Marquee — how it works</h1>
+          <h1 className="text-lg font-semibold text-fg">Marquee — how it works</h1>
           <p className="mt-1 text-sm text-muted">
-            A quick guide to Louie, the tabs, and your taste graph. Jump to any
-            section using the bar above.
+            A quick guide to Louie, the sections, and your taste graph. Jump to any section using the bar above.
           </p>
         </div>
         {SECTIONS.map((s) => (
           <section key={s.id} id={`help-${s.id}`} className="mb-6 scroll-mt-2">
-            <h2 className="mb-1.5 border-b border-card-border/60 pb-1 text-sm font-semibold text-glow">
-              {s.title}
-            </h2>
-            <div className="text-sm leading-relaxed">
+            <h2 className="mb-1.5 border-b border-border/60 pb-1 text-base font-semibold text-fg md:text-sm">{s.title}</h2>
+            <div className="text-[15px] leading-relaxed md:text-sm">
               <Markdown text={s.body} />
             </div>
           </section>
@@ -247,10 +248,10 @@ export default function HelpPanel() {
         <div className="mb-6">
           <PushToggle />
         </div>
-        <div className="mt-2 border-t border-card-border pt-3 text-xs text-muted">
-          This guide is kept in sync with the app as features change.
-        </div>
+        <div className="mt-2 border-t border-border pt-3 text-xs text-muted">This guide is kept in sync with the app as features change.</div>
       </div>
     </div>
   );
 }
+
+export default memo(HelpPanel);
