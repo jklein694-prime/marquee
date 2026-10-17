@@ -28,7 +28,7 @@ chmod 600 "$KEY_FILE"
 
 # --- connectivity ---------------------------------------------------------------
 echo "== checking connectivity to api.anthropic.com"
-if ! curl -sI --max-time 15 https://api.anthropic.com >/dev/null; then
+if ! python3 -c "import socket; socket.create_connection(('api.anthropic.com',443),15).close()" 2>/dev/null; then
   echo "FATAL: cannot reach api.anthropic.com — connect WiFi first" >&2
   exit 1
 fi
