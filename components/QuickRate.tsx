@@ -25,20 +25,23 @@ export function TitleSearch({
   const [searching, setSearching] = useState(false);
 
   useEffect(() => {
-    if (!query.trim()) {
-      setResults([]);
-      return;
-    }
-    setSearching(true);
+    if (!query.trim()) return;
+    let stale = false;
     const id = setTimeout(() => {
+      setSearching(true);
       fetch(`/api/search?q=${encodeURIComponent(query)}`)
         .then((r) => r.json())
-        .then(setResults)
-        .catch(() => setResults([]))
-        .finally(() => setSearching(false));
+        .then((hits) => !stale && setResults(hits))
+        .catch(() => !stale && setResults([]))
+        .finally(() => !stale && setSearching(false));
     }, 300);
-    return () => clearTimeout(id);
+    return () => {
+      stale = true;
+      clearTimeout(id);
+    };
   }, [query]);
+  // an empty query shows nothing, whatever the last fetch returned
+  const shown = query.trim() ? results : [];
 
   return (
     <div className="space-y-2">
@@ -50,7 +53,7 @@ export function TitleSearch({
         className="w-full rounded-md border border-card-border bg-card px-3 py-2 text-sm outline-none placeholder:text-muted focus:border-glow/60"
       />
       {searching && <div className="text-xs text-muted">searching…</div>}
-      {results.map((r) => (
+      {shown.map((r) => (
         <button
           key={`${r.media}-${r.id}`}
           onClick={() => {
@@ -61,7 +64,7 @@ export function TitleSearch({
           className="flex w-full items-center gap-3 rounded-lg border border-card-border bg-card p-2.5 text-left hover:border-glow/60"
         >
           {r.poster_path ? (
-            // eslint-disable-next-line @next/next/no-img-element
+             
             <img
               src={`https://image.tmdb.org/t/p/w92${r.poster_path}`}
               alt={r.title}
@@ -81,7 +84,7 @@ export function TitleSearch({
           </div>
         </button>
       ))}
-      {!searching && query.trim() && results.length === 0 && (
+      {!searching && query.trim() && shown.length === 0 && (
         <div className="text-xs text-muted">No results.</div>
       )}
     </div>
@@ -133,7 +136,7 @@ export default function QuickRate({ onChat }: { onChat: ChatSend }) {
         <div className="rounded-lg border border-card-border bg-card p-2.5">
           <div className="flex gap-3">
             {picked.poster_path ? (
-              // eslint-disable-next-line @next/next/no-img-element
+               
               <img
                 src={`https://image.tmdb.org/t/p/w185${picked.poster_path}`}
                 alt={picked.title}

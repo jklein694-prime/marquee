@@ -7,9 +7,7 @@ import fs from "fs";
 import path from "path";
 import webpush, { type PushSubscription } from "web-push";
 import { onTurnFinished, type Turn } from "./turns";
-
-const KEYS = path.join(process.cwd(), "data/vapid.json");
-const SUBS = path.join(process.cwd(), "data/push.json");
+import { PUSH_KEYS_FILE as KEYS, PUSH_SUBS_FILE as SUBS } from "./paths";
 
 interface Vapid {
   publicKey: string;

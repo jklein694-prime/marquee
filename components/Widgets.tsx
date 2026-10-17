@@ -237,7 +237,7 @@ export function MovieCards({ data }: { data: RecsData }) {
           className="w-44 shrink-0 overflow-hidden rounded-lg border border-card-border bg-card"
         >
           {m.poster_path ? (
-            // eslint-disable-next-line @next/next/no-img-element
+             
             <img
               src={`https://image.tmdb.org/t/p/w342${m.poster_path}`}
               alt={m.title}

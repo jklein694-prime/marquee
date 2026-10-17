@@ -65,3 +65,7 @@ data/turns/
 data/sessions/
 data/push.json
 data/vapid.json
+
+# playwright
+/test-results/
+/playwright-report/

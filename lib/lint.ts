@@ -2,8 +2,7 @@ import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
 import { CATEGORY_DIRS, HUB, MOVIES_DIR, TASTE_DIR, mdFiles, wikilinks } from "./vault";
-
-const REPORT = path.join(process.cwd(), "data/lint-pending.txt");
+import { LINT_REPORT_FILE as REPORT } from "./paths";
 
 // mechanical, deterministic fixes applied in place; returns what was fixed
 // ponytail: hub-only, wikilink syntax only — widen scope when the report shows

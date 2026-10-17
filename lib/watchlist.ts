@@ -3,6 +3,7 @@ import path from "path";
 import matter from "gray-matter";
 import { HUB, WIKILINK, wikilinks } from "./vault";
 import { details, searchMulti, Media } from "./tmdb";
+import { SNOOZE_FILE, WATCHLIST_FILE as FILE } from "./paths";
 
 export interface WatchItem {
   title: string;
@@ -19,8 +20,6 @@ export interface WatchItem {
   verifiedAt?: number;
 }
 
-const FILE = path.join(process.cwd(), "data/watchlist.json");
-const SNOOZE_FILE = path.join(process.cwd(), "data/snoozed.json");
 const SNOOZE_MS = 14 * 24 * 60 * 60 * 1000;
 
 // snoozed suggestions: lowercased title → expiry epoch-ms; expired entries are
@@ -133,10 +132,6 @@ export function hubSuggestions(): WatchItem[] {
 // real scheduler — good enough for a single-user local app; add a cron/queue
 // if this ever needs to run without the tab open
 const VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
-
-function titleOf(name: string, year?: number): string {
-  return year ? `${name} (${year})` : name;
-}
 
 // resolves a title to the right TMDB entry: search matches movies and tv
 // together and are relevance-ranked, not identity-ranked, so an unrelated

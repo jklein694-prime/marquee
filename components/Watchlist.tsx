@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { WatchItem, VetoItem } from "@/lib/watchlist";
 import { canonicalService, canonicalServices } from "@/lib/services";
 import type { ChatSend } from "./ChatPane";
+import { useLocalStorage } from "@/lib/useLocalStorage";
 
 const EXCLUDED_KEY = "marquee-excluded-services";
 
@@ -219,7 +220,7 @@ function Card({
     >
       <div className="flex gap-3">
         {item.poster_path ? (
-          // eslint-disable-next-line @next/next/no-img-element
+           
           <img
             src={`https://image.tmdb.org/t/p/w342${item.poster_path}`}
             alt={item.title}
@@ -341,22 +342,20 @@ export default function Watchlist({
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [pending, setPending] = useState<Set<string>>(new Set());
   // services the user unchecked — stored as exclusions so new services default on
-  const [excluded, setExcluded] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
+  const [excludedRaw, setExcludedRaw] = useLocalStorage(EXCLUDED_KEY, "[]");
+  const excluded = useMemo<Set<string>>(() => {
     try {
-      setExcluded(new Set(JSON.parse(localStorage.getItem(EXCLUDED_KEY) ?? "[]")));
-    } catch {}
-  }, []);
+      return new Set(JSON.parse(excludedRaw));
+    } catch {
+      return new Set();
+    }
+  }, [excludedRaw]);
 
   function toggleService(s: string) {
-    setExcluded((prev) => {
-      const next = new Set(prev);
-      if (next.has(s)) next.delete(s);
-      else next.add(s);
-      localStorage.setItem(EXCLUDED_KEY, JSON.stringify([...next]));
-      return next;
-    });
+    const next = new Set(excluded);
+    if (next.has(s)) next.delete(s);
+    else next.add(s);
+    setExcludedRaw(JSON.stringify([...next]));
   }
 
   const services = canonicalServices([...user, ...suggestions].flatMap((i) => i.streaming ?? [])).sort();

@@ -26,7 +26,10 @@ function nodeRadius(n: GraphNode): number {
   return n.kind === "genre" ? 7 : n.kind === "taste" || n.kind === "ghost" ? 3.5 : 5;
 }
 
-type WikiState = "loading" | "missing" | { title: string; content: string };
+type WikiPage = { title: string; content: string };
+// keyed by the node it was fetched for: a selection whose page has not landed
+// yet is "loading" by derivation, with no state write inside an effect
+type WikiState = { forId: string; page: WikiPage | "missing" };
 
 const VERB_TEXT: Record<ThinkingEvent["verb"], string> = {
   read: "reading the wiki…",
@@ -116,7 +119,9 @@ export default function GraphView({
   });
   const [ghosts, setGhosts] = useState<GhostSet>(EMPTY_GHOSTS);
   const ghostsRef = useRef(ghosts);
-  ghostsRef.current = ghosts;
+  useEffect(() => {
+    ghostsRef.current = ghosts;
+  }, [ghosts]);
   const pendingOpsRef = useRef<GhostOp[]>([]);
   const lastRealSpotRef = useRef<string | null>(null);
   const lastEventAtRef = useRef(0); // any stream activity → the graph breathes
@@ -151,9 +156,11 @@ export default function GraphView({
     return s;
   }, [data]);
   const realRef = useRef({ realIds, realEdges });
-  realRef.current = { realIds, realEdges };
   const dataRef = useRef(data);
-  dataRef.current = data;
+  useEffect(() => {
+    realRef.current = { realIds, realEdges };
+    dataRef.current = data;
+  }, [realIds, realEdges, data]);
 
   // merged view the 3D graph + engine consume; identity changes only when a
   // flush lands (load-bearing: per-render churn would keep the d3 sim boiling)
@@ -176,20 +183,23 @@ export default function GraphView({
   }, []);
 
   useEffect(() => {
-    if (!selected) {
-      setWiki(null);
-      return;
-    }
+    if (!selected) return;
     let stale = false;
-    setWiki("loading");
-    fetch(`/api/wiki?id=${encodeURIComponent(selected.id)}`)
+    const forId = selected.id;
+    fetch(`/api/wiki?id=${encodeURIComponent(forId)}`)
       .then((r) => (r.ok ? r.json() : "missing"))
-      .then((w) => !stale && setWiki(w))
-      .catch(() => !stale && setWiki("missing"));
+      .then((page: WikiPage | "missing") => !stale && setWiki({ forId, page }))
+      .catch(() => !stale && setWiki({ forId, page: "missing" }));
     return () => {
       stale = true;
     };
   }, [selected]);
+  // the page for the current selection, "loading" until it lands
+  const wikiPage: WikiPage | "missing" | "loading" | null = !selected
+    ? null
+    : wiki?.forId === selected.id
+      ? wiki.page
+      : "loading";
 
   useEffect(() => {
     if (!selected) return;
@@ -217,8 +227,9 @@ export default function GraphView({
     (endId(l.source) === selected.id || endId(l.target) === selected.id);
 
   // heat overrides toward glow; the cold rest keeps selection dim/highlight,
-  // and recedes while a live show is running so the hot nodes read clearly
-  const liveHeatRef = useRef(false);
+  // and recedes while a live show is running so the hot nodes read clearly.
+  // "live heat" is read from the engine inside the paint callbacks (they run
+  // at draw time, not render time).
   const engine = useHeatEngine(liveData, {
     spotTtlMs: 8000,
     // shimmer needs render ticks while the stream is active but nothing is hot
@@ -226,7 +237,7 @@ export default function GraphView({
     coldNode: (n) => {
       if (neighborIds)
         return neighborIds.has(n.id) ? nodeColor(n) : withAlpha(nodeColor(n), 0.12);
-      if (liveHeatRef.current) return withAlpha(nodeColor(n), 0.3);
+      if (engine.heatRef.current.size > 0) return withAlpha(nodeColor(n), 0.3);
       // stream active, nothing hot yet — the whole graph breathes ("indexing")
       if (Date.now() - lastEventAtRef.current < 6000)
         return withAlpha(nodeColor(n), 0.38 + 0.12 * Math.sin(Date.now() / 250));
@@ -240,7 +251,6 @@ export default function GraphView({
           : "#2a221a",
     coldLinkWidth: (l) => (linkActive(l as unknown as GraphLink) ? 2 : 1),
   });
-  liveHeatRef.current = engine.heatRef.current.size > 0;
 
   // flush buffered ghost ops ≤2×/s: one sim re-heat per flush, not per event;
   // pinning first means only the NEW nodes move — the constellation holds still
@@ -389,7 +399,7 @@ export default function GraphView({
             ctx.save();
             if (dimmed) ctx.globalAlpha = 0.15;
             else if (h <= 0.05) {
-              if (liveHeatRef.current) ctx.globalAlpha = 0.35;
+              if (engine.heatRef.current.size > 0) ctx.globalAlpha = 0.35;
               else if (Date.now() - lastEventAtRef.current < 6000)
                 ctx.globalAlpha = 0.42 + 0.12 * Math.sin(Date.now() / 250);
             }
@@ -424,7 +434,7 @@ export default function GraphView({
         <div className="absolute right-3 top-3 z-10 max-h-[calc(100%-1.5rem)] w-80 max-w-[85%] overflow-y-auto rounded-lg border border-card-border bg-card/95 backdrop-blur-sm">
           <div className="sticky top-0 z-10 flex items-start justify-between gap-2 rounded-t-lg bg-card/95 p-4 pb-2 backdrop-blur-sm">
             <div className="text-sm font-medium text-glow">
-              {typeof wiki === "object" && wiki ? wiki.title : selected.label}
+              {typeof wikiPage === "object" && wikiPage ? wikiPage.title : selected.label}
             </div>
             <button
               onClick={() => setSelected(null)}
@@ -435,8 +445,8 @@ export default function GraphView({
             </button>
           </div>
           <div className="break-words px-4 pb-4 text-sm">
-            {wiki === "loading" && <div className="text-muted">Loading…</div>}
-            {wiki === "missing" &&
+            {wikiPage === "loading" && <div className="text-muted">Loading…</div>}
+            {wikiPage === "missing" &&
               // taste nodes are synthesized from a hub bullet, so the bullet is
               // the content — reporting it "missing" read like a broken page
               (selected.text ? (
@@ -447,7 +457,7 @@ export default function GraphView({
                   has no page of its own.
                 </div>
               ))}
-            {typeof wiki === "object" && wiki && <Markdown text={wiki.content} />}
+            {typeof wikiPage === "object" && wikiPage && <Markdown text={wikiPage.content} />}
           </div>
         </div>
       )}

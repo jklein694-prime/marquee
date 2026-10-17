@@ -116,7 +116,9 @@ export function useHeatEngine(
   const lastGlideRef = useRef(0);
   const lastParticleRef = useRef(0);
   const optsRef = useRef(opts);
-  optsRef.current = opts;
+  useEffect(() => {
+    optsRef.current = opts;
+  });
 
   const nodeById = useMemo(() => new Map(graph.nodes.map((n) => [n.id, n])), [graph]);
   const byNorm = useMemo(() => {
@@ -138,7 +140,9 @@ export function useHeatEngine(
   // methods stay identity-stable across renders (safe effect deps) by reading
   // the latest maps through a ref
   const mapsRef = useRef({ nodeById, byNorm, adj });
-  mapsRef.current = { nodeById, byNorm, adj };
+  useEffect(() => {
+    mapsRef.current = { nodeById, byNorm, adj };
+  }, [nodeById, byNorm, adj]);
 
   const resolve = useCallback((raw: string): { id: string; label: string } | undefined => {
     const { nodeById, byNorm } = mapsRef.current;
@@ -257,7 +261,9 @@ export function useHeatEngine(
   // at 10Hz while hot, so force-graph re-reads styles exactly when heat or
   // caller state (selection, phase) changes
   void heatVersion;
-  const pulse = 0.7 + 0.3 * Math.sin(Date.now() / 140);
+  // sampled at paint time (force-graph calls the accessors from its own
+  // animation frame), never during render
+  const pulse = () => 0.7 + 0.3 * Math.sin(Date.now() / 140);
   const linkHeat = (l: LinkObject) => {
     const gl = l as unknown as GraphLink;
     return Math.max(
@@ -275,7 +281,7 @@ export function useHeatEngine(
     nodeVal: (node: NodeObject) => {
       const n = node as unknown as GraphNode;
       const h = heatRef.current.get(n.id) ?? 0;
-      return (BASE_VAL[n.kind] ?? 5) + h * 5 * (h > 0.05 ? pulse : 1);
+      return (BASE_VAL[n.kind] ?? 5) + h * 5 * (h > 0.05 ? pulse() : 1);
     },
     // an edge lights when EITHER endpoint is hot — a considered node shows
     // all its connections, not just links between two simultaneously-hot nodes
@@ -288,7 +294,7 @@ export function useHeatEngine(
       )},${Math.round(26 + (GLOW[2] - 26) * h)})`;
     },
     linkWidth: (l: LinkObject) =>
-      linkHeat(l) > 0.15 ? 1 + 2 * linkHeat(l) * pulse : optsRef.current.coldLinkWidth?.(l) ?? 1,
+      linkHeat(l) > 0.15 ? 1 + 2 * linkHeat(l) * pulse() : optsRef.current.coldLinkWidth?.(l) ?? 1,
     linkDirectionalParticleWidth: 1.8,
     linkDirectionalParticleColor: () => "#f5b942",
     linkDirectionalParticleSpeed: 0.02,

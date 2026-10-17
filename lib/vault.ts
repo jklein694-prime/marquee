@@ -3,6 +3,7 @@ import { createHash } from "crypto";
 import path from "path";
 import matter from "gray-matter";
 import { WIKILINK, wikilinks } from "./wikilink";
+import { WATCHLIST_FILE } from "./paths";
 
 // Vault location is configurable: set VAULT_PATH in .env.local (install.sh does this).
 // Falls back to a ./vault folder in the project so the app still boots with an empty graph.
@@ -128,7 +129,7 @@ export function vaultSignature(): string {
     for (const f of mdFiles(dir)) add(f);
   }
   add(HUB);
-  add(path.join(process.cwd(), "data/watchlist.json"));
+  add(WATCHLIST_FILE);
   return createHash("sha1").update(parts.join("\n")).digest("base64url");
 }
 
@@ -261,7 +262,7 @@ export function buildGraph(): { nodes: GraphNode[]; links: GraphLink[] } {
   // personal watchlist (data/watchlist.json) — graphed directly rather than
   // via a wiki bullet, so a node always shows up even if the chat agent never
   // got around to writing one
-  const userListFile = path.join(process.cwd(), "data/watchlist.json");
+  const userListFile = WATCHLIST_FILE;
   if (fs.existsSync(userListFile)) {
     const items = JSON.parse(fs.readFileSync(userListFile, "utf8")) as {
       title: string;

@@ -324,7 +324,7 @@ export default function PredictPanel() {
       {picked && (
         <div className="absolute left-3 top-3 z-10 flex items-center gap-3 rounded-lg border border-card-border bg-card/90 p-2 pr-3 backdrop-blur-sm">
           {picked.poster_path && (
-            // eslint-disable-next-line @next/next/no-img-element
+             
             <img
               src={`https://image.tmdb.org/t/p/w92${picked.poster_path}`}
               alt={picked.title}
@@ -361,7 +361,7 @@ export default function PredictPanel() {
           <div className="max-h-full w-96 max-w-full overflow-y-auto rounded-lg border border-card-border bg-card/95 p-5 backdrop-blur-sm">
             <div className="flex gap-4">
               {picked.poster_path && (
-                // eslint-disable-next-line @next/next/no-img-element
+                 
                 <img
                   src={`https://image.tmdb.org/t/p/w185${picked.poster_path}`}
                   alt={picked.title}

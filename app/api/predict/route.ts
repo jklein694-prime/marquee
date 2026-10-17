@@ -5,7 +5,7 @@ import { runPredictTurn } from "@/lib/agent";
 import { norm } from "@/lib/recFilter";
 import { engineName } from "@/lib/engine";
 import { runApiPredictTurn } from "@/lib/engine/api";
-import { MOVIES_DIR, mdFiles } from "@/lib/vault";
+import { MOVIES_DIR, cachedGraph, mdFiles } from "@/lib/vault";
 import { readUserList } from "@/lib/watchlist";
 import { details } from "@/lib/tmdb";
 
@@ -93,6 +93,25 @@ export async function POST(req: Request) {
           ? ` Director/creator: ${info.director ?? "unknown"}. Genres: ${(info.genres ?? []).join(", ")}. Overview: ${info.overview}`
           : "";
         const message = `Predict the user's score for: ${title}${year ? ` (${year})` : ""} [${media}, TMDB id ${id}].${facts}`;
+
+        if (engineName() === "mock") {
+          // scripted screening for end-to-end tests: walks a few real graph
+          // nodes, then a fixed verdict — no model, no network
+          const { nodes } = cachedGraph().graph;
+          const picks = nodes.filter((n) => n.kind === "genre").slice(0, 3);
+          const step = Number(process.env.MOCK_STEP_MS ?? 150);
+          const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+          emit({ type: "status", label: "scanning the wiki…" });
+          for (const n of picks) {
+            if (req.signal.aborted) return;
+            await sleep(step);
+            emit({ type: "node", id: n.id, source: "read" });
+            emit({ type: "consider", node: n.id, thought: `weighing ${n.label}` });
+          }
+          await sleep(step);
+          emit({ type: "verdict", predicted: "7-8", why: `Mock verdict for ${title}: fits the taste graph well enough.` });
+          return;
+        }
 
         if (engineName() === "api") {
           const ac = new AbortController();

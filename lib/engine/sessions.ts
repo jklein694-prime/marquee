@@ -4,8 +4,7 @@
 import fs from "fs";
 import path from "path";
 import type { BetaMessageParam, BetaToolUseBlock } from "@anthropic-ai/sdk/resources/beta/messages/messages";
-
-const DIR = path.join(process.cwd(), "data/sessions");
+import { SESSIONS_DIR as DIR } from "../paths";
 const ID = /^[0-9a-f-]{36}$/;
 
 export interface SessionFile {

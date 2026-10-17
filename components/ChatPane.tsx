@@ -29,7 +29,7 @@ export function Markdown({ text }: { text: string }) {
             {...p}
           />
         ),
-        img: (p) => <img className="my-1.5 max-w-full rounded-lg" {...p} />,
+        img: ({ alt, ...p }) => <img alt={alt ?? ""} className="my-1.5 max-w-full rounded-lg" {...p} />,
         blockquote: (p) => <blockquote className="border-l-2 border-glow/40 pl-3 text-muted" {...p} />,
         table: (p) => (
           <div className="my-1.5 overflow-x-auto">
@@ -266,25 +266,6 @@ export default function ChatPane({
     return () => clearInterval(id);
   }, [busy]);
 
-  const send: ChatSend = (text, onDone, opts) => {
-    if (!text.trim()) return false;
-    if (opts?.silent) {
-      if (logBusyRef.current) {
-        logQueueRef.current.push({ text, onDone, tag: opts.tag });
-        return "queued";
-      }
-      void run(text, onDone, true, opts.tag);
-      return "sent";
-    }
-    if (busyRef.current || restoringRef.current) {
-      queueRef.current.push({ text, onDone });
-      return "queued";
-    }
-    void run(text, onDone);
-    return "sent";
-  };
-  if (sendRef) sendRef.current = send;
-
   // existing: attach to a turn that is already running/finished (restoring the
   // transcript after a reload) instead of starting one. replay: an earlier,
   // finished turn — rebuild its messages without re-animating the booth.
@@ -435,6 +416,28 @@ export default function ChatPane({
       }
     }
   }
+
+  const send: ChatSend = (text, onDone, opts) => {
+    if (!text.trim()) return false;
+    if (opts?.silent) {
+      if (logBusyRef.current) {
+        logQueueRef.current.push({ text, onDone, tag: opts.tag });
+        return "queued";
+      }
+      void run(text, onDone, true, opts.tag);
+      return "sent";
+    }
+    if (busyRef.current || restoringRef.current) {
+      queueRef.current.push({ text, onDone });
+      return "queued";
+    }
+    void run(text, onDone);
+    return "sent";
+  };
+  // published after commit so a parent never calls a stale closure mid-render
+  useEffect(() => {
+    if (sendRef) sendRef.current = send;
+  });
 
   return (
     <>
