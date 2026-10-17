@@ -10,7 +10,7 @@ import PredictPanel from "@/components/PredictPanel";
 import HelpPanel from "@/components/HelpPanel";
 import { Button, IconButton } from "@/components/ui";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { ChatIcon, ChevronLeftIcon, CloseIcon, DotsIcon, GraphIcon, ListIcon, StarIcon } from "@/components/icons";
+import { ChatIcon, ChevronLeftIcon, CloseIcon, DotsIcon, GraphIcon, ListIcon, PlusIcon, StarIcon } from "@/components/icons";
 import { emitThinking, traceToThinking } from "@/lib/liveThinking";
 import { pushTrace, useTrace } from "@/lib/traceStore";
 
@@ -135,6 +135,8 @@ export default function Home() {
   // the phone keyboard is up: hide the bottom nav so it doesn't stack on it
   const [chatFocused, setChatFocused] = useState(false);
   const chatSend = useRef<ChatSend>(() => false);
+  const chatNew = useRef<() => void>(() => {});
+  const [hasChat, setHasChat] = useState(false);
 
   const open = useCallback((p: Panel) => {
     setPanel(p);
@@ -175,15 +177,25 @@ export default function Home() {
             <img src="/icon.png" alt="" className="h-8 w-8 louie-growl" />
             <h1 className="text-lg font-semibold tracking-wide text-accent">Marquee</h1>
             <span className="hidden text-xs text-muted md:inline">your movie &amp; TV expert</span>
-            {!panel && (
-              <span className="ml-auto hidden gap-1 md:flex">
-                {TABS.map(([id, label]) => (
-                  <Button key={id} variant="ghost" size="sm" onClick={() => open(id)}>
-                    {label}
-                  </Button>
-                ))}
-              </span>
-            )}
+            <span className="ml-auto flex items-center gap-1">
+              {/* the conversation's own action sits with the conversation: in its
+                  header, always reachable, not floating in the transcript */}
+              {hasChat && (
+                <Button variant="secondary" size="sm" onClick={() => chatNew.current()}>
+                  <PlusIcon size={16} />
+                  New chat
+                </Button>
+              )}
+              {!panel && (
+                <span className="hidden gap-1 md:flex">
+                  {TABS.map(([id, label]) => (
+                    <Button key={id} variant="ghost" size="sm" onClick={() => open(id)}>
+                      {label}
+                    </Button>
+                  ))}
+                </span>
+              )}
+            </span>
           </header>
           <ErrorBoundary name="Chat">
             <ChatPane
@@ -192,7 +204,9 @@ export default function Home() {
               onOpenHelp={onOpenHelp}
               onWatchGraph={onWatchGraph}
               onInputFocusChange={setChatFocused}
+              onConversationChange={setHasChat}
               sendRef={chatSend}
+              newChatRef={chatNew}
             />
           </ErrorBoundary>
         </section>

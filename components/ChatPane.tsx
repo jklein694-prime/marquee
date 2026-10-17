@@ -156,14 +156,20 @@ export default function ChatPane({
   onOpenHelp,
   onWatchGraph,
   onInputFocusChange,
+  onConversationChange,
   sendRef,
+  newChatRef,
 }: {
   onTurnEnd: () => void;
   onTrace: (t: TraceEntry) => void;
   onOpenHelp?: () => void;
   onWatchGraph?: () => void;
   onInputFocusChange?: (focused: boolean) => void;
+  /** true while there is a transcript to clear: the header shows New chat */
+  onConversationChange?: (hasMessages: boolean) => void;
   sendRef?: MutableRefObject<ChatSend>;
+  /** the header's New chat button calls this */
+  newChatRef?: MutableRefObject<() => void>;
 }) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -424,18 +430,16 @@ export default function ChatPane({
   // published after commit so a parent never calls a stale closure mid-render
   useEffect(() => {
     if (sendRef) sendRef.current = send;
+    if (newChatRef) newChatRef.current = newChat;
   });
+  const hasMessages = messages.length > 0;
+  useEffect(() => {
+    onConversationChange?.(hasMessages);
+  }, [hasMessages, onConversationChange]);
 
   return (
     <>
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4 md:px-5">
-        {messages.length > 0 && !busy && (
-          <div className="flex justify-end">
-            <Button variant="secondary" size="sm" onClick={newChat}>
-              New chat
-            </Button>
-          </div>
-        )}
         {messages.length === 0 && (
           <div className="mx-auto mt-4 max-w-sm text-center md:mt-10">
             <LouieHero />
