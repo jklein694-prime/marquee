@@ -27,8 +27,8 @@ from gardener.gitops import Git  # noqa: E402
 from gardener.vaultio import Vault  # noqa: E402
 from gardener.workqueue import WorkQueue  # noqa: E402
 
-MODEL = "claude-sonnet-5"
-MAX_TOKENS = 8000
+MODEL = "claude-sonnet-5-5"
+MAX_TOKENS = 16000  # adaptive thinking counts toward this
 MAX_PATCH_CHARS = 30000
 MAX_FAILED_SHOWN = 10
 SAMPLED_PAGES = 5
