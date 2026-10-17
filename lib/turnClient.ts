@@ -25,11 +25,18 @@ function waitVisible(): Promise<void> {
   });
 }
 
+// crypto.randomUUID only exists in secure contexts — and the app is often
+// opened over plain http://<nano-ip>:3000 — but getRandomValues works anywhere
+function randomId(): string {
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+}
+
 export async function startTurn(body: { message: string; sessionId?: string; silent?: boolean }): Promise<string> {
   // a lost response would make a retry start a second turn, so retry only
   // when the request never got an answer and it's safe: the server dedupes
   // on clientId
-  const clientId = crypto.randomUUID();
+  const clientId = randomId();
   let lastErr: unknown;
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
