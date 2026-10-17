@@ -95,8 +95,13 @@ LLAMA_EXTRA_ARGS=""
 if [ "${CUDA_PRESENT:-0}" = 1 ] && [ ! -x "$CUDA_BIN" ]; then
   echo "== CUDA build (best-effort; failure is fine, CPU remains)"
   export PATH="/usr/local/cuda-10.2/bin:$PATH"
+  # clean SEQUENTIALLY, never `make -j2 clean server`: under -j the clean
+  # target runs concurrently with the build and deletes .o files mid-link
+  # (observed on real hardware: the CUDA kernels compiled fine, then the
+  # link died on objects clean had just removed)
+  make -C "$SRC_DIR" clean >>"$BUILD_LOG" 2>&1 || true
   if timeout 3600 env LLAMA_CUBLAS=1 CUDA_DOCKER_ARCH=sm_53 \
-       make -C "$SRC_DIR" -j2 clean server >>"$BUILD_LOG" 2>&1; then
+       make -C "$SRC_DIR" -j2 server >>"$BUILD_LOG" 2>&1; then
     install -m 755 "$SRC_DIR/server" "$CUDA_BIN"
     echo "   CUDA build OK -> $CUDA_BIN"
   else

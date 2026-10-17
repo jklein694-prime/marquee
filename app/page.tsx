@@ -9,6 +9,7 @@ import PredictPanel from "@/components/PredictPanel";
 import HelpPanel from "@/components/HelpPanel";
 import { emitThinking, traceToThinking } from "@/lib/liveThinking";
 
+
 const KIND_STYLE: Record<TraceEntry["kind"], string> = {
   init: "text-muted",
   tool: "text-foreground",
@@ -130,7 +131,7 @@ export default function Home() {
         >
           <header className="flex items-center gap-3 border-b border-card-border px-5 py-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/icon.png" alt="Louie" className="h-8 w-8" />
+            <img src="/icon.png" alt="Louie" className="h-8 w-8 louie-growl" />
             <h1 className="text-lg font-semibold tracking-wide text-glow">
               Marquee
             </h1>

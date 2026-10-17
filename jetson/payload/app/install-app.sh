@@ -50,7 +50,10 @@ else
 fi
 
 echo "== pulling $IMAGE (arm64)"
-docker pull "$IMAGE"
+# best-effort: a flaky link must not kill the install when the image is
+# already local; only die if it's neither pullable nor present
+docker pull "$IMAGE" || docker image inspect "$IMAGE" >/dev/null 2>&1 \
+  || { echo "FATAL: $IMAGE not present and pull failed" >&2; exit 1; }
 
 echo "== npm ci + next build inside the container (slow on the Nano; one-time per update)"
 # the build is the RAM-hungriest moment this device ever sees — pause the
@@ -77,6 +80,14 @@ fi
 echo "== installing wikigardener-app.service"
 API_KEY=""
 [ -f "$KEY_FILE" ] && API_KEY="$(cat "$KEY_FILE")"
+# subscription auth for the chat agent (Claude Agent SDK): a token minted by
+# `claude setup-token` on any logged-in machine, copied to the Nano. When
+# present it powers chat via the user's Claude subscription — no API billing.
+OAUTH_TOKEN=""
+[ -f /etc/wikigardener/claude-oauth.token ] && OAUTH_TOKEN="$(cat /etc/wikigardener/claude-oauth.token)"
+# TMDB key (movie search/posters); .env.local never travels via git
+TMDB_KEY=""
+[ -f /etc/wikigardener/tmdb.key ] && TMDB_KEY="$(cat /etc/wikigardener/tmdb.key)"
 cat > /etc/systemd/system/wikigardener-app.service <<EOF
 [Unit]
 Description=Marquee wiki app (Dockerized Next.js) on :3000
@@ -88,9 +99,12 @@ ExecStartPre=-/usr/bin/docker rm -f wikigardener-app
 ExecStart=/usr/bin/docker run --name wikigardener-app --rm \\
   -p 3000:3000 -m 700m \\
   -v $APP_DIR:/app -w /app \\
-  -v $VAULT:/vault:ro \\
+  -v $VAULT:/vault \\
   -e VAULT_PATH=/vault \\
+  -e IS_SANDBOX=1 \\
   -e ANTHROPIC_API_KEY=$API_KEY \\
+  -e CLAUDE_CODE_OAUTH_TOKEN=$OAUTH_TOKEN \\
+  -e TMDB_API_KEY=$TMDB_KEY \\
   $IMAGE npm start
 ExecStop=/usr/bin/docker stop wikigardener-app
 Restart=on-failure
@@ -109,6 +123,9 @@ cat <<EOF
   open:      http://${IP:-<nano-ip>}:3000     (graph view + wiki + chat)
   status:    systemctl status wikigardener-app
   update:    re-run this script during an online window (pulls + rebuilds)
-  NOTE: the vault is mounted read-only into the app; the gardener stays the
-  single writer. Chat needs an online window; browsing works offline.
+  NOTE: the vault is mounted read-write (chat writes pages directly via the
+  page-writer subagent); the gardener also writes on its own timer. Both go
+  through git, which serializes commits itself — a rare overlap fails one
+  side's operation for that cycle, it doesn't corrupt anything. Chat needs an
+  online window; browsing works offline.
 EOF
