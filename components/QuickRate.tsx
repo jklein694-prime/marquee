@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { ReviewForm } from "./Watchlist";
 import type { ChatSend } from "./ChatPane";
 import { Poster } from "./Poster";
@@ -96,7 +96,7 @@ interface LogEntry {
   label: string;
 }
 
-export default function QuickRate({ onChat }: { onChat: ChatSend }) {
+function QuickRate({ onChat }: { onChat: ChatSend }) {
   const [picked, setPicked] = useState<SearchResult | null>(null);
   const [pending, setPending] = useState<LogEntry[]>([]);
   const [logged, setLogged] = useState<LogEntry[]>([]);
@@ -177,3 +177,5 @@ export default function QuickRate({ onChat }: { onChat: ChatSend }) {
     </div>
   );
 }
+
+export default memo(QuickRate);

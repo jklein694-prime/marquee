@@ -1,32 +1,47 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { GraphNode, GraphLink } from "@/lib/vault";
-import { Markdown } from "./ChatPane";
-import {
-  useHeatEngine,
-  SpotCard,
-  nodeColor,
-  endId,
-  withAlpha,
-  norm,
-  heatColor,
-  pinNodes,
-} from "./useHeatEngine";
+import type { ForceGraphMethods as Graph2DMethods } from "react-force-graph-2d";
+import { Markdown } from "./Markdown";
+import { useHeatEngine, SpotCard, nodeColor, endId, withAlpha, norm, heatColor, pinNodes } from "./useHeatEngine";
 import { onThinking, type ThinkingEvent } from "@/lib/liveThinking";
 import { graphPalette } from "@/lib/theme";
+import { useGraph, type GraphData } from "@/lib/graphClient";
 import { Chip, IconButton, Sheet } from "./ui";
 import { InfoIcon } from "./icons";
 
-const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
-  ssr: false,
-});
+const Graph2D = dynamic(() => import("./Graph2D"), { ssr: false });
 const Graph3D = dynamic(() => import("./Graph3D"), { ssr: false });
 
 // base draw radius; the 2D canvas adds a heat bump on top of this
 function nodeRadius(n: GraphNode): number {
   return n.kind === "genre" ? 7 : n.kind === "taste" || n.kind === "ghost" ? 3.5 : 5;
+}
+
+// --- glow sprites -----------------------------------------------------------
+// ctx.shadowBlur on every node every frame was the single most expensive
+// thing the 2D canvas did (a blur pass per node per repaint). A radial
+// gradient rendered once per palette color and drawn with drawImage costs
+// one texture blit. Hot nodes glow in the accent color so the cache stays
+// bounded by the palette instead of growing with every lerp step.
+const SPRITE = 64;
+const sprites = new Map<string, HTMLCanvasElement>();
+function glowSprite(hex: string): HTMLCanvasElement {
+  let c = sprites.get(hex);
+  if (c) return c;
+  c = document.createElement("canvas");
+  c.width = c.height = SPRITE;
+  const g = c.getContext("2d")!;
+  const grad = g.createRadialGradient(SPRITE / 2, SPRITE / 2, 0, SPRITE / 2, SPRITE / 2, SPRITE / 2);
+  grad.addColorStop(0, withAlpha(hex, 0.5));
+  grad.addColorStop(0.45, withAlpha(hex, 0.14));
+  grad.addColorStop(1, withAlpha(hex, 0));
+  g.fillStyle = grad;
+  g.fillRect(0, 0, SPRITE, SPRITE);
+  sprites.set(hex, c);
+  return c;
 }
 
 type WikiPage = { title: string; content: string };
@@ -60,26 +75,16 @@ interface GhostOp {
 
 // pure: applies buffered ops in one pass; returns the SAME object when nothing
 // changed so the graphData identity (and the d3 sim) stays untouched
-function growGhosts(
-  g: GhostSet,
-  ops: GhostOp[],
-  realIds: Set<string>,
-  realEdges: Set<string>,
-  now: number
-): GhostSet {
+function growGhosts(g: GhostSet, ops: GhostOp[], realIds: Set<string>, realEdges: Set<string>, now: number): GhostSet {
   let changed = false;
   let nodes = g.nodes.slice() as (GraphNode & { bornAt?: number })[];
   let links = g.links.slice();
   const drop = (dead: Set<string>) => {
     nodes = nodes.filter((n) => !dead.has(n.id));
-    links = links.filter(
-      (l) => !dead.has(endId(l.source)) && !dead.has(endId(l.target))
-    );
+    links = links.filter((l) => !dead.has(endId(l.source)) && !dead.has(endId(l.target)));
     changed = true;
   };
-  const stale = new Set(
-    nodes.filter((n) => (n.bornAt ?? now) < now - GHOST_TTL).map((n) => n.id)
-  );
+  const stale = new Set(nodes.filter((n) => (n.bornAt ?? now) < now - GHOST_TTL).map((n) => n.id));
   if (stale.size) drop(stale);
   const edgeKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
   const have = new Set(links.map((l) => edgeKey(endId(l.source), endId(l.target))));
@@ -107,20 +112,26 @@ function growGhosts(
   return changed ? { nodes, links } : g;
 }
 
-export default function GraphView({
+function GraphView({
   version,
   mode,
   onModeChange,
+  active = true,
 }: {
   version: number;
   mode: "2d" | "3d";
   onModeChange: (m: "2d" | "3d") => void;
+  /** false while the panel is mounted but hidden: no fetches, no render loop */
+  active?: boolean;
 }) {
-  const [data, setData] = useState<{ nodes: GraphNode[]; links: GraphLink[] }>({
-    nodes: [],
-    links: [],
-  });
-  const [ghosts, setGhosts] = useState<GhostSet>(EMPTY_GHOSTS);
+  // one shared copy of the graph; a turn end (version bump) refetches once
+  // for every panel that draws it, and stale data stays up until it lands
+  const data = useGraph(version, active);
+  // ghosts belong to the data they were grown on: a refetch makes candidates
+  // that became real pages reappear as permanent nodes and the rest dissolve,
+  // in the same render, by derivation rather than an effect
+  const [ghostState, setGhostState] = useState<{ for: GraphData; ghosts: GhostSet }>({ for: data, ghosts: EMPTY_GHOSTS });
+  const ghosts = ghostState.for === data ? ghostState.ghosts : EMPTY_GHOSTS;
   const ghostsRef = useRef(ghosts);
   useEffect(() => {
     ghostsRef.current = ghosts;
@@ -132,20 +143,7 @@ export default function GraphView({
   const [size, setSize] = useState({ width: 600, height: 600 });
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [wiki, setWiki] = useState<WikiState | null>(null);
-
-  // turn end: refetch and clear ghosts in ONE render — candidates that became
-  // real pages reappear as permanent nodes, the rest dissolve
-  useEffect(() => {
-    fetch("/api/graph")
-      .then((r) => r.json())
-      .then((d) => {
-        pendingOpsRef.current = [];
-        lastRealSpotRef.current = null;
-        setGhosts(EMPTY_GHOSTS);
-        setData(d);
-      })
-      .catch(() => {});
-  }, [version]);
+  const fg2dRef = useRef<Graph2DMethods | undefined>(undefined);
 
   // cached lookup sets for the flush (rebuilt only when the real graph changes)
   const realIds = useMemo(() => new Set(data.nodes.map((n) => n.id)), [data]);
@@ -165,7 +163,7 @@ export default function GraphView({
     dataRef.current = data;
   }, [realIds, realEdges, data]);
 
-  // merged view the 3D graph + engine consume; identity changes only when a
+  // merged view the graphs + engine consume; identity changes only when a
   // flush lands (load-bearing: per-render churn would keep the d3 sim boiling)
   const liveData = useMemo(
     () =>
@@ -175,15 +173,31 @@ export default function GraphView({
     [data, ghosts]
   );
 
+  // ignore the 0x0 readings while the panel is hidden (display: none)
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() =>
-      setSize({ width: el.clientWidth, height: el.clientHeight })
-    );
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth > 0 && el.clientHeight > 0) setSize({ width: el.clientWidth, height: el.clientHeight });
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // 2D: frame the whole constellation once the layout settles for a given
+  // data set (and again when the canvas changes size); a user's own zoom is
+  // never overridden mid-session
+  const fittedForRef = useRef<GraphData | null>(null);
+  const fit2d = useCallback(() => fg2dRef.current?.zoomToFit(400, 28), []);
+  const onEngineStop = useCallback(() => {
+    if (fittedForRef.current === dataRef.current) return;
+    fittedForRef.current = dataRef.current;
+    fit2d();
+  }, [fit2d]);
+  useEffect(() => {
+    if (mode === "2d" && fittedForRef.current === data) fit2d();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [size]);
 
   useEffect(() => {
     if (!selected) return;
@@ -230,9 +244,7 @@ export default function GraphView({
     return ids;
   }, [selected, data]);
 
-  const linkActive = (l: GraphLink) =>
-    !!selected &&
-    (endId(l.source) === selected.id || endId(l.target) === selected.id);
+  const linkActive = (l: GraphLink) => !!selected && (endId(l.source) === selected.id || endId(l.target) === selected.id);
 
   // heat overrides toward glow; the cold rest keeps selection dim/highlight,
   // and recedes while a live show is running so the hot nodes read clearly.
@@ -243,12 +255,10 @@ export default function GraphView({
     // shimmer needs render ticks while the stream is active but nothing is hot
     tickWhenIdle: () => Date.now() - lastEventAtRef.current < 6000,
     coldNode: (n) => {
-      if (neighborIds)
-        return neighborIds.has(n.id) ? nodeColor(n) : withAlpha(nodeColor(n), 0.12);
+      if (neighborIds) return neighborIds.has(n.id) ? nodeColor(n) : withAlpha(nodeColor(n), 0.12);
       if (engine.heatRef.current.size > 0) return withAlpha(nodeColor(n), 0.3);
       // stream active, nothing hot yet — the whole graph breathes ("indexing")
-      if (Date.now() - lastEventAtRef.current < 6000)
-        return withAlpha(nodeColor(n), 0.38 + 0.12 * Math.sin(Date.now() / 250));
+      if (Date.now() - lastEventAtRef.current < 6000) return withAlpha(nodeColor(n), 0.38 + 0.12 * Math.sin(Date.now() / 250));
       return nodeColor(n);
     },
     coldLink: (l) =>
@@ -263,22 +273,34 @@ export default function GraphView({
   // flush buffered ghost ops ≤2×/s: one sim re-heat per flush, not per event;
   // pinning first means only the NEW nodes move — the constellation holds still
   useEffect(() => {
+    let lastData = dataRef.current;
     const iv = window.setInterval(() => {
       const now = Date.now();
+      if (dataRef.current !== lastData) {
+        // a refetch landed: ops buffered against the old graph are void
+        lastData = dataRef.current;
+        pendingOpsRef.current = [];
+        lastRealSpotRef.current = null;
+      }
       const hasStale = ghostsRef.current.nodes.some(
         (n) => ((n as GraphNode & { bornAt?: number }).bornAt ?? now) < now - GHOST_TTL
       );
       if (!pendingOpsRef.current.length && !hasStale) return;
       const ops = pendingOpsRef.current.splice(0);
       const { realIds, realEdges } = realRef.current;
-      pinNodes(dataRef.current.nodes);
-      setGhosts((g) => growGhosts(g, ops, realIds, realEdges, now));
+      const base = dataRef.current;
+      pinNodes(base.nodes);
+      setGhostState((s) => {
+        const cur = s.for === base ? s.ghosts : EMPTY_GHOSTS;
+        const next = growGhosts(cur, ops, realIds, realEdges, now);
+        return next === cur && s.for === base ? s : { for: base, ghosts: next };
+      });
     }, 500);
     return () => window.clearInterval(iv);
   }, []);
 
   // live show: Louie's chat/silent-turn activity lights the graph while this
-  // tab is open in 3D — purely observational, dropped when unmounted
+  // tab is open — purely observational, dropped when unmounted
   const [liveLabel, setLiveLabel] = useState("");
   const liveTimerRef = useRef(0);
   const lastSpotRef = useRef(0);
@@ -290,9 +312,7 @@ export default function GraphView({
       liveTimerRef.current = window.setTimeout(() => setLiveLabel(""), 4000);
       // wikilinks seen in the write/read payload → background burst on the
       // linked existing nodes (no spotlight steal)
-      const linked = (ev.links ?? [])
-        .map((l) => engine.resolve(l))
-        .filter((h): h is { id: string; label: string } => !!h);
+      const linked = (ev.links ?? []).map((l) => engine.resolve(l)).filter((h): h is { id: string; label: string } => !!h);
       if (linked.length) engine.activate(linked.map((h) => ({ ...h, thought: "" })));
       if (!ev.key) return;
       const hit = engine.resolve(ev.key);
@@ -311,14 +331,12 @@ export default function GraphView({
               ? "writing a new page…"
               : "updating this page…"
             : "reading the wiki page…";
-      engine.activate([{ id: anchorId, label: hit?.label ?? ev.key, thought }], {
-        spotlight: first,
-      });
+      engine.activate([{ id: anchorId, label: hit?.label ?? ev.key, thought }], { spotlight: first });
       // ghost creation + connections are buffered; the 500ms flush applies them
       if (!hit || linked.length) {
         pendingOpsRef.current.push({
           newGhost: hit ? undefined : ev.key,
-          birthAnchor: hit ? undefined : lastRealSpotRef.current ?? undefined,
+          birthAnchor: hit ? undefined : (lastRealSpotRef.current ?? undefined),
           anchor: anchorId,
           connect: linked.map((h) => h.id),
         });
@@ -327,6 +345,11 @@ export default function GraphView({
     // resolve/activate are identity-stable
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const pickNode = (node: object) => {
+    const n = node as unknown as GraphNode;
+    setSelected((cur) => (cur?.id === n.id ? null : n));
+  };
 
   return (
     <div ref={containerRef} className="relative h-full w-full">
@@ -363,14 +386,11 @@ export default function GraphView({
             ] as const
           ).map(([k, label]) => (
             <div key={k} className="flex items-center gap-2 py-0.5 text-muted">
-              <span
-                aria-hidden
-                className="inline-block h-3 w-3 shrink-0 rounded-full"
-                style={{ backgroundColor: graphPalette()[k] }}
-              />
+              <span aria-hidden className="inline-block h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: graphPalette()[k] }} />
               {label}
             </div>
           ))}
+          <div className="mt-1.5 text-muted">Pinch or scroll to zoom — labels appear as you get closer.</div>
           {liveLabel && (
             <div className="mt-1.5 flex items-center gap-1.5 text-muted sm:hidden">
               <span className="animate-pulse text-accent">●</span> {liveLabel}
@@ -379,12 +399,13 @@ export default function GraphView({
         </div>
       )}
       {data.nodes.length === 0 ? (
-        <div className="flex h-full items-center justify-center text-muted text-sm">
+        <div className="flex h-full items-center justify-center text-sm text-muted">
           The taste graph is empty — talk movies and watch it grow.
         </div>
       ) : mode === "3d" ? (
         <Graph3D
           fgRef={engine.fgRef}
+          paused={!active}
           width={size.width}
           height={size.height}
           graphData={liveData}
@@ -392,69 +413,70 @@ export default function GraphView({
           showNavInfo={false}
           enableNodeDrag={false}
           nodeLabel={(n) => (n as unknown as GraphNode).label}
-          onNodeClick={(node) => {
-            const n = node as unknown as GraphNode;
-            setSelected((cur) => (cur?.id === n.id ? null : n));
-          }}
+          onNodeClick={pickNode}
           onBackgroundClick={() => setSelected(null)}
           {...engine.graphProps}
         />
       ) : (
-        <ForceGraph2D
+        <Graph2D
+          fgRef={fg2dRef}
+          paused={!active}
           width={size.width}
           height={size.height}
           graphData={liveData}
           backgroundColor={graphPalette().background}
-          autoPauseRedraw={false}
           d3AlphaDecay={0.05}
           d3VelocityDecay={0.5}
+          onEngineStop={onEngineStop}
           // pad each node's clickable area beyond its drawn radius so taps land on
           // touch screens (drawn radii are only 3.5–7px); also helps mouse aim
           nodePointerAreaPaint={(node, color, ctx) => {
             const n = node as unknown as GraphNode & { x: number; y: number };
             ctx.fillStyle = color;
             ctx.beginPath();
-            ctx.arc(n.x, n.y, nodeRadius(n) + 6, 0, 2 * Math.PI);
+            ctx.arc(n.x, n.y, nodeRadius(n) + 8, 0, 2 * Math.PI);
             ctx.fill();
           }}
           linkColor={engine.graphProps.linkColor}
           linkWidth={engine.graphProps.linkWidth}
-          onNodeClick={(node) => {
-            const n = node as unknown as GraphNode;
-            setSelected((cur) => (cur?.id === n.id ? null : n));
-          }}
+          onNodeClick={pickNode}
           onBackgroundClick={() => setSelected(null)}
           nodeCanvasObject={(node, ctx, globalScale) => {
             const n = node as unknown as GraphNode & { x: number; y: number };
-            // the canvas repaints at 60fps, so reading heat through refs makes
-            // the 2D view exactly as live as the 3D one
+            // heat is read through refs at paint time, so the 2D view is
+            // exactly as live as the 3D one whenever a repaint happens
             const h = engine.heatRef.current.get(n.id) ?? 0;
-            const color = h > 0.05 ? heatColor(nodeColor(n), h) : nodeColor(n);
+            const base = nodeColor(n);
+            const color = h > 0.05 ? heatColor(base, h) : base;
             const r = nodeRadius(n) + h * 4;
             const dimmed = neighborIds ? !neighborIds.has(n.id) : false;
             ctx.save();
             if (dimmed) ctx.globalAlpha = 0.15;
             else if (h <= 0.05) {
               if (engine.heatRef.current.size > 0) ctx.globalAlpha = 0.35;
-              else if (Date.now() - lastEventAtRef.current < 6000)
-                ctx.globalAlpha = 0.42 + 0.12 * Math.sin(Date.now() / 250);
+              else if (Date.now() - lastEventAtRef.current < 6000) ctx.globalAlpha = 0.42 + 0.12 * Math.sin(Date.now() / 250);
             }
-            ctx.shadowColor = color;
-            ctx.shadowBlur = 12;
+            // glow: one cached sprite per palette color (accent when hot)
+            const gr = r * 2.4;
+            ctx.drawImage(glowSprite(h > 0.05 ? graphPalette().accent : base), n.x - gr, n.y - gr, gr * 2, gr * 2);
             ctx.fillStyle = color;
             ctx.beginPath();
             ctx.arc(n.x, n.y, r, 0, 2 * Math.PI);
             ctx.fill();
             if (selected?.id === n.id) {
-              ctx.shadowBlur = 0;
               ctx.strokeStyle = graphPalette().edgeActive;
               ctx.lineWidth = 1.5 / globalScale;
               ctx.beginPath();
               ctx.arc(n.x, n.y, r + 3, 0, 2 * Math.PI);
               ctx.stroke();
             }
-            if (globalScale > 0.8 || (!dimmed && neighborIds) || h > 0.5) {
-              ctx.shadowBlur = 0;
+            // labels only where they can be read: a node at least ~6 screen px
+            // across (categories first as you zoom in, then titles, then
+            // notes), plus anything selected, neighbouring, or hot. Zoomed
+            // out on a phone that means a clean constellation, not label soup.
+            const screenR = r * globalScale;
+            const show = (neighborIds && !dimmed) || h > 0.5 || selected?.id === n.id || screenR >= 6;
+            if (show) {
               ctx.font = `${11 / globalScale}px sans-serif`;
               ctx.textAlign = "center";
               ctx.textBaseline = "top";
@@ -480,9 +502,7 @@ export default function GraphView({
               (selected.text ? (
                 <Markdown text={selected.text} />
               ) : (
-                <div className="text-muted">
-                  Not written up yet — this title is linked from other pages but has no page of its own.
-                </div>
+                <div className="text-muted">Not written up yet — this title is linked from other pages but has no page of its own.</div>
               ))}
             {typeof wikiPage === "object" && wikiPage && <Markdown text={wikiPage.content} />}
           </div>
@@ -491,3 +511,5 @@ export default function GraphView({
     </div>
   );
 }
+
+export default memo(GraphView);

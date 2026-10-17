@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { idleFrames, openPanel, stubSearch } from "./helpers";
+import { idleRepaints, openPanel, stubSearch } from "./helpers";
 
 // Render-loop gates (PLAN.md §4): the graph must not repaint while nothing is
 // moving, and a long streamed reply must not make typing lag.
@@ -15,8 +15,8 @@ test.describe("render performance gates", () => {
     await expect(page.locator("canvas").first()).toBeVisible();
     // let the force layout settle
     await page.waitForTimeout(4000);
-    const frames = await idleFrames(page, 2000);
-    expect(frames, "animation frames in 2s while idle").toBeLessThanOrEqual(5);
+    const repaints = await idleRepaints(page, 2000);
+    expect(repaints, "canvas repaints in 2s while idle").toBeLessThanOrEqual(5);
   });
 
   test("three.js never loads unless 3D is chosen", async ({ page }) => {

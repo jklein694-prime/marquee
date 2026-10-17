@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { WatchItem, VetoItem } from "@/lib/watchlist";
 import { canonicalService, canonicalServices } from "@/lib/services";
 import type { ChatSend } from "./ChatPane";
@@ -268,7 +268,16 @@ function Card({
   );
 }
 
-export default function Watchlist({ version, onChat }: { version: number; onChat: ChatSend }) {
+function Watchlist({
+  version,
+  onChat,
+  active = true,
+}: {
+  version: number;
+  onChat: ChatSend;
+  /** false while mounted but hidden: the refetch waits until the panel is shown */
+  active?: boolean;
+}) {
   const [user, setUser] = useState<WatchItem[]>([]);
   const [suggestions, setSuggestions] = useState<WatchItem[]>([]);
   const [notInterested, setNotInterested] = useState<VetoItem[]>([]);
@@ -314,7 +323,14 @@ export default function Watchlist({ version, onChat }: { version: number; onChat
       .catch(() => {});
   }, []);
 
-  useEffect(refetch, [refetch, version]);
+  // the panel stays mounted across tab switches, so a turn ending while it is
+  // hidden refetches once, on the next show, not every time the version moves
+  const fetchedForRef = useRef(-1);
+  useEffect(() => {
+    if (!active || fetchedForRef.current === version) return;
+    fetchedForRef.current = version;
+    refetch();
+  }, [active, version, refetch]);
 
   async function post(body: Record<string, unknown>) {
     await fetch("/api/watchlist", {
@@ -601,3 +617,5 @@ export default function Watchlist({ version, onChat }: { version: number; onChat
     </div>
   );
 }
+
+export default memo(Watchlist);

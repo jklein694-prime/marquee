@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { GraphNode, GraphLink } from "@/lib/vault";
 import {
@@ -16,6 +16,7 @@ import { TitleSearch, type SearchResult } from "./QuickRate";
 import { graphPalette } from "@/lib/theme";
 import { Poster } from "./Poster";
 import { Button } from "./ui";
+import { useGraph } from "@/lib/graphClient";
 
 const Graph3D = dynamic(() => import("./Graph3D"), { ssr: false });
 
@@ -55,13 +56,11 @@ type PredictEvent =
   | { type: "error"; message?: string }
   | { type: "done" };
 
-export default function PredictPanel() {
+function PredictPanel({ version, active = true }: { version: number; active?: boolean }) {
   const [phase, setPhase] = useState<Phase>("search");
   const [picked, setPicked] = useState<SearchResult | null>(null);
-  const [graph, setGraph] = useState<{ nodes: GraphNode[]; links: GraphLink[] }>({
-    nodes: [],
-    links: [],
-  });
+  // the shared graph copy; only fetched once this panel is actually shown
+  const graph = useGraph(version, active);
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [onList, setOnList] = useState(false);
   const [status, setStatus] = useState("");
@@ -101,13 +100,6 @@ export default function PredictPanel() {
     coldLink: (l) => ((l as { ghost?: boolean }).ghost ? graphPalette().edgeGhost : graphPalette().edge),
   });
   heatEmptyRef.current = engine.heatRef.current.size === 0;
-
-  useEffect(() => {
-    fetch("/api/graph")
-      .then((r) => r.json())
-      .then(setGraph)
-      .catch(() => {});
-  }, []);
 
   // the graph container only exists past the search phase, so re-attach on
   // change; ignore the 0x0 readings while the panel is hidden (display: none)
@@ -312,6 +304,7 @@ export default function PredictPanel() {
       {graph.nodes.length > 0 && (
         <Graph3D
           fgRef={engine.fgRef}
+          paused={!active}
           width={size.width}
           height={size.height}
           graphData={liveData}
@@ -402,3 +395,5 @@ export default function PredictPanel() {
     </div>
   );
 }
+
+export default memo(PredictPanel);

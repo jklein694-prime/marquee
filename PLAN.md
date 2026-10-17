@@ -201,7 +201,7 @@ Current coverage: 46 unit tests over the server side (engines, turns, push, vaul
    - New chat clears local transcript and session
    - manifest and service worker register on `localhost`
 3. **Mobile layout gate** (from the audit script): iPhone 13 and a 360-wide Android profile; assert no overflow, tap targets ≥ 44, text ≥ 12 px, axe contrast clean, on every panel including open review forms and menus.
-4. **Performance gates** in CI: bundle budgets from §4.8; idle rAF count on the graph tab ≤ 5 per 2 s; chat with a 2,000-word mock reply keeps input latency under 50 ms (measure with `performance.now()` around keypress in the test).
+4. **Performance gates** in CI: bundle budgets from §4.8; idle canvas repaints on the graph tab ≤ 5 per 2 s (force-graph keeps its frame loop alive for input, so repaints are the honest measure); chat with a 2,000-word mock reply keeps input latency under 50 ms (measure with `performance.now()` around keypress in the test).
 5. **Manual device pass** (installed PWA over Tailscale HTTPS, one checklist, run before each release): keyboard + bottom nav, outside-tap dismiss, 3D pauses when backgrounded, push arrives for a detached turn, battery drain over a 10-minute graph session before vs after.
 
 ---

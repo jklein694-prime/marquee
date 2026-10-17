@@ -11,6 +11,7 @@ import HelpPanel from "@/components/HelpPanel";
 import { Button, IconButton } from "@/components/ui";
 import { ChatIcon, ChevronLeftIcon, CloseIcon, DotsIcon, GraphIcon, ListIcon, StarIcon } from "@/components/icons";
 import { emitThinking, traceToThinking } from "@/lib/liveThinking";
+import { pushTrace, useTrace } from "@/lib/traceStore";
 
 const KIND_STYLE: Record<TraceEntry["kind"], string> = {
   init: "text-muted",
@@ -20,7 +21,10 @@ const KIND_STYLE: Record<TraceEntry["kind"], string> = {
   model: "text-muted",
 };
 
-function Booth({ entries, model }: { entries: TraceEntry[]; model: string | null }) {
+// subscribes to the trace store itself: trace lines arrive several times a
+// second during a turn and nothing else in the app needs to re-render for them
+function Booth() {
+  const { entries, model } = useTrace();
   const bottomRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
@@ -123,26 +127,31 @@ export default function Home() {
   const [graphVersion, setGraphVersion] = useState(0);
   const [panel, setPanel] = useState<Panel>(null);
   const [graphMode, setGraphMode] = useState<"2d" | "3d">("2d");
-  const [trace, setTrace] = useState<TraceEntry[]>([]);
-  const [model, setModel] = useState<string | null>(null);
+  // panels mount on first visit and then stay mounted (hidden) so the graph
+  // layout, scroll position, and a running screening survive tab switches;
+  // nothing is fetched for a panel that was never opened
+  const [visited, setVisited] = useState<Set<Panel>>(() => new Set());
   // the phone keyboard is up: hide the bottom nav so it doesn't stack on it
   const [chatFocused, setChatFocused] = useState(false);
   const chatSend = useRef<ChatSend>(() => false);
 
+  const open = useCallback((p: Panel) => {
+    setPanel(p);
+    if (p) setVisited((v) => (v.has(p) ? v : new Set(v).add(p)));
+  }, []);
   const onTurnEnd = useCallback(() => setGraphVersion((v) => v + 1), []);
   const onTrace = useCallback((t: TraceEntry) => {
-    setTrace((prev) => [...prev, t]);
-    if (t.kind === "model") setModel(t.label);
-    // live 3D show: map wiki-touching tool calls to graph activations
+    pushTrace(t);
+    // live show: map wiki-touching tool calls to graph activations
     const ev = traceToThinking(t);
     if (ev) emitThinking(ev);
   }, []);
-  const onOpenHelp = useCallback(() => setPanel("help"), []);
+  const onOpenHelp = useCallback(() => open("help"), [open]);
   const onWatchGraph = useCallback(() => {
-    setPanel("graph");
+    open("graph");
     // 3D is a battery cost on a phone: the live show runs in 2D there
     if (window.matchMedia("(min-width: 768px)").matches) setGraphMode("3d");
-  }, []);
+  }, [open]);
   const chat = useCallback<ChatSend>((t, onDone, opts) => chatSend.current(t, onDone, opts), []);
 
   const showNav = !(panel === null && chatFocused);
@@ -168,7 +177,7 @@ export default function Home() {
             {!panel && (
               <span className="ml-auto hidden gap-1 md:flex">
                 {TABS.map(([id, label]) => (
-                  <Button key={id} variant="ghost" size="sm" onClick={() => setPanel(id)}>
+                  <Button key={id} variant="ghost" size="sm" onClick={() => open(id)}>
                     {label}
                   </Button>
                 ))}
@@ -196,19 +205,19 @@ export default function Home() {
                 size="sm"
                 aria-current={panel === id ? "page" : undefined}
                 className={panel === id ? "bg-accent-muted text-accent hover:text-accent" : ""}
-                onClick={() => setPanel(id)}
+                onClick={() => open(id)}
               >
                 {label}
               </Button>
             ))}
-            <IconButton label="Close panel" className="ml-auto" onClick={() => setPanel(null)}>
+            <IconButton label="Close panel" className="ml-auto" onClick={() => open(null)}>
               <CloseIcon size={18} />
             </IconButton>
           </div>
           {/* mobile title bar — bottom nav handles switching */}
           <div className="flex h-12 items-center gap-1 border-b border-border px-1 md:hidden">
             {SECONDARY.has(panel) ? (
-              <IconButton label="Back to More" onClick={() => setPanel("more")}>
+              <IconButton label="Back to More" onClick={() => open("more")}>
                 <ChevronLeftIcon />
               </IconButton>
             ) : (
@@ -217,27 +226,42 @@ export default function Home() {
             <span className="min-w-0 flex-1 truncate px-1 text-base font-medium text-fg">
               {panel && PANEL_TITLE[panel]}
             </span>
-            <IconButton label="Close panel" onClick={() => setPanel(null)}>
+            <IconButton label="Close panel" onClick={() => open(null)}>
               <CloseIcon size={18} />
             </IconButton>
           </div>
           <div className="min-h-0 flex-1">
-            <div className={panel === "predict" ? "h-full" : "hidden"}>
-              <PredictPanel />
-            </div>
-            {panel === "graph" ? (
-              <GraphView version={graphVersion} mode={graphMode} onModeChange={setGraphMode} />
-            ) : panel === "watchlist" ? (
-              <Watchlist version={graphVersion} onChat={chat} />
-            ) : panel === "rate" ? (
-              <QuickRate onChat={chat} />
-            ) : panel === "help" ? (
-              <HelpPanel />
-            ) : panel === "more" ? (
-              <MorePanel onPick={setPanel} />
-            ) : panel === "booth" ? (
-              <Booth entries={trace} model={model} />
-            ) : null}
+            {visited.has("graph") && (
+              <div className={panel === "graph" ? "h-full" : "hidden"}>
+                <GraphView version={graphVersion} mode={graphMode} onModeChange={setGraphMode} active={panel === "graph"} />
+              </div>
+            )}
+            {visited.has("watchlist") && (
+              <div className={panel === "watchlist" ? "h-full" : "hidden"}>
+                <Watchlist version={graphVersion} onChat={chat} active={panel === "watchlist"} />
+              </div>
+            )}
+            {visited.has("rate") && (
+              <div className={panel === "rate" ? "h-full" : "hidden"}>
+                <QuickRate onChat={chat} />
+              </div>
+            )}
+            {visited.has("predict") && (
+              <div className={panel === "predict" ? "h-full" : "hidden"}>
+                <PredictPanel version={graphVersion} active={panel === "predict"} />
+              </div>
+            )}
+            {visited.has("help") && (
+              <div className={panel === "help" ? "h-full" : "hidden"}>
+                <HelpPanel />
+              </div>
+            )}
+            {visited.has("booth") && (
+              <div className={panel === "booth" ? "h-full" : "hidden"}>
+                <Booth />
+              </div>
+            )}
+            {panel === "more" && <MorePanel onPick={open} />}
           </div>
         </section>
       </div>
@@ -251,7 +275,7 @@ export default function Home() {
           return (
             <button
               key={label}
-              onClick={() => setPanel(id)}
+              onClick={() => open(id)}
               aria-current={active ? "page" : undefined}
               className={`relative flex h-14 flex-1 flex-col items-center justify-center gap-0.5 text-xs transition-colors ${
                 active ? "text-accent" : "text-muted"

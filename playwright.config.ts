@@ -40,7 +40,10 @@ export default defineConfig({
   webServer: {
     command: `npx next start -p ${PORT}`,
     url: `http://localhost:${PORT}/api/graph`,
-    reuseExistingServer: !process.env.CI,
+    // never adopt a server that happens to be on the port: it could be serving
+    // a previous build's assets, which is exactly the kind of failure a gate
+    // must not hide
+    reuseExistingServer: false,
     timeout: 60_000,
     env: {
       MARQUEE_ENGINE: "mock",

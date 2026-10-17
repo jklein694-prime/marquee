@@ -6,7 +6,8 @@
 // chat, watchlist, taste graph, or booth work, update the matching SECTION
 // below in the same change so the guide never drifts from the app.
 
-import { Markdown } from "./ChatPane";
+import { memo } from "react";
+import { Markdown } from "./Markdown";
 import PushToggle from "./PushToggle";
 import { Chip } from "./ui";
 
@@ -211,7 +212,7 @@ that served the last reply is shown at the top.`,
   },
 ];
 
-export default function HelpPanel() {
+function HelpPanel() {
   // scope the lookup to this panel (ids are unique to it while mounted, but be
   // explicit) and scroll to the section header
   const jump = (id: string) => document.getElementById(`help-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -252,3 +253,5 @@ export default function HelpPanel() {
     </div>
   );
 }
+
+export default memo(HelpPanel);

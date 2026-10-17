@@ -68,16 +68,25 @@ export async function expectLayoutClean(page: Page, screen: string) {
   expect(r.tiny, `${screen}: text under 12px`).toEqual([]);
 }
 
-/** Count animation frames over `ms` while nothing should be moving. */
-export async function idleFrames(page: Page, ms = 2000): Promise<number> {
+/**
+ * Count canvas repaints over `ms` while nothing should be moving. force-graph
+ * keeps its requestAnimationFrame loop alive even when auto-paused (so pinch
+ * and hover stay responsive), but it only clears and redraws the canvas when
+ * something changed — so the clearRect count is the honest "work done" signal.
+ */
+export async function idleRepaints(page: Page, ms = 2000): Promise<number> {
   return page.evaluate(
     (ms) =>
       new Promise<number>((resolve) => {
         let n = 0;
-        const orig = window.requestAnimationFrame;
-        window.requestAnimationFrame = (cb) => orig.call(window, (t) => (n++, cb(t)));
+        const proto = CanvasRenderingContext2D.prototype;
+        const orig = proto.clearRect;
+        proto.clearRect = function (...args) {
+          n++;
+          return orig.apply(this, args);
+        };
         setTimeout(() => {
-          window.requestAnimationFrame = orig;
+          proto.clearRect = orig;
           resolve(n);
         }, ms);
       }),

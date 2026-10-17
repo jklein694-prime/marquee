@@ -1,50 +1,10 @@
 "use client";
 
-import { MutableRefObject, useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { WIKILINK } from "@/lib/wikilink";
+import { MutableRefObject, useCallback, useEffect, useRef, useState } from "react";
+import { Markdown, ThrottledMarkdown } from "./Markdown";
 import { OptionPicker, MovieCards, MovieChecklist, OptionsData, RecsData, ChecklistData } from "./Widgets";
 import { clearChat, followTurn, loadChat, saveChat, startTurn, stopTurn, type ClientTurnEvent } from "@/lib/turnClient";
 import { Button } from "./ui";
-
-export function Markdown({ text }: { text: string }) {
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        p: (p) => <p className="my-1.5 first:mt-0 last:mb-0" {...p} />,
-        strong: (p) => <strong className="font-semibold text-fg" {...p} />,
-        h1: (p) => <div className="mt-2 font-semibold text-fg" {...p} />,
-        h2: (p) => <div className="mt-2 font-semibold text-fg" {...p} />,
-        h3: (p) => <div className="mt-2 font-semibold text-fg" {...p} />,
-        h4: (p) => <div className="mt-2 font-semibold text-fg" {...p} />,
-        hr: () => <hr className="my-2 border-border" />,
-        ul: (p) => <ul className="my-1.5 list-disc space-y-1 pl-5" {...p} />,
-        ol: (p) => <ol className="my-1.5 list-decimal space-y-1 pl-5" {...p} />,
-        a: (p) => <a className="text-accent underline" target="_blank" {...p} />,
-        code: (p) => <code className="rounded bg-surface-0 px-1 font-mono text-[0.9em]" {...p} />,
-        pre: (p) => (
-          <pre
-            className="my-1.5 overflow-x-auto rounded-lg border border-border bg-surface-0 p-2.5 text-xs [&_code]:bg-transparent [&_code]:p-0"
-            {...p}
-          />
-        ),
-        img: ({ alt, ...p }) => <img alt={alt ?? ""} className="my-1.5 max-w-full rounded-lg" {...p} />,
-        blockquote: (p) => <blockquote className="border-l-2 border-border-strong pl-3 text-muted" {...p} />,
-        table: (p) => (
-          <div className="my-1.5 overflow-x-auto">
-            <table className="w-full border-collapse text-xs" {...p} />
-          </div>
-        ),
-        th: (p) => <th className="border-b border-border px-2 py-1 text-left font-semibold text-fg" {...p} />,
-        td: (p) => <td className="border-b border-border/60 px-2 py-1 align-top" {...p} />,
-      }}
-    >
-      {text.replace(WIKILINK, "$1")}
-    </ReactMarkdown>
-  );
-}
 
 type Msg =
   | { role: "user" | "assistant"; text: string }
@@ -227,6 +187,33 @@ export default function ChatPane({
   const logSessionRef = useRef<string | undefined>(undefined);
   const logBusyRef = useRef(false);
   const logQueueRef = useRef<{ text: string; onDone?: () => void; tag?: string }[]>([]);
+  // streamed text is appended once per animation frame, not once per token:
+  // a long reply arrives as hundreds of deltas and each setMessages used to
+  // re-render (and re-parse) the whole transcript
+  const deltaBufRef = useRef("");
+  const deltaRafRef = useRef(0);
+  const flushDeltas = useCallback(() => {
+    if (deltaRafRef.current) cancelAnimationFrame(deltaRafRef.current);
+    deltaRafRef.current = 0;
+    const delta = deltaBufRef.current;
+    if (!delta) return;
+    deltaBufRef.current = "";
+    setMessages((m) => {
+      const next = [...m];
+      // append to the last assistant bubble, or open a new one after a widget
+      const last = next[next.length - 1];
+      if (last?.role === "assistant") next[next.length - 1] = { role: "assistant", text: last.text + delta };
+      else next.push({ role: "assistant", text: delta });
+      return next;
+    });
+  }, []);
+  const queueDelta = useCallback(
+    (delta: string) => {
+      deltaBufRef.current += delta;
+      if (!deltaRafRef.current) deltaRafRef.current = requestAnimationFrame(flushDeltas);
+    },
+    [flushDeltas]
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
@@ -339,19 +326,9 @@ export default function ChatPane({
           // busy strip belongs to the chat; background logs stay invisible.
           if (!silent) setActivity(ev.label ? `${ev.label}${ev.detail ? ` ${ev.detail}` : ""}` : "working…");
         } else if (ev.type === "text") {
-          setMessages((m) => {
-            const next = [...m];
-            // append to the last assistant bubble, or open a new one after a widget
-            const last = next[next.length - 1];
-            const delta = String(ev.delta ?? "");
-            if (last?.role === "assistant") {
-              next[next.length - 1] = { role: "assistant", text: last.text + delta };
-            } else {
-              next.push({ role: "assistant", text: delta });
-            }
-            return next;
-          });
+          queueDelta(String(ev.delta ?? ""));
         } else if (ev.type === "widget") {
+          flushDeltas(); // keep text before the widget it precedes
           setMessages((m) => {
             // drop duplicate widget re-calls within the same turn
             const dup = m.some(
@@ -375,6 +352,7 @@ export default function ChatPane({
             if (label) setActivity(label);
           }
         } else if (ev.type === "done") {
+          flushDeltas();
           const sid = ev.sessionId as string | undefined;
           if (silent) logSessionRef.current = sid ?? logSessionRef.current;
           else {
@@ -399,6 +377,7 @@ export default function ChatPane({
         });
       }
     } finally {
+      flushDeltas();
       onDone?.();
       if (!replay) onTurnEnd();
       if (silent) {
@@ -494,12 +473,22 @@ export default function ChatPane({
                 {msg.text}
               </div>
             );
+          // the bubble still streaming re-parses on a throttle; finished ones are memoized
+          const live = busy && i === messages.length - 1;
           return (
             <div
               key={i}
               className="mr-2 break-words rounded-lg border border-border bg-surface-1 px-3.5 py-2.5 text-[15px] leading-relaxed md:mr-6 md:text-sm"
             >
-              {msg.text ? <Markdown text={msg.text} /> : <span className="animate-pulse text-muted">thinking…</span>}
+              {msg.text ? (
+                live ? (
+                  <ThrottledMarkdown text={msg.text} />
+                ) : (
+                  <Markdown text={msg.text} />
+                )
+              ) : (
+                <span className="animate-pulse text-muted">thinking…</span>
+              )}
             </div>
           );
         })}
