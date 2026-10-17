@@ -1,7 +1,10 @@
 import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
-import { norm, runPredictTurn } from "@/lib/agent";
+import { runPredictTurn } from "@/lib/agent";
+import { norm } from "@/lib/recFilter";
+import { engineName } from "@/lib/engine";
+import { runApiPredictTurn } from "@/lib/engine/api";
 import { MOVIES_DIR, mdFiles } from "@/lib/vault";
 import { readUserList } from "@/lib/watchlist";
 import { details } from "@/lib/tmdb";
@@ -41,6 +44,21 @@ export async function POST(req: Request) {
         } catch {}
       };
 
+      // model ended without calling verdict — salvage a score from its final
+      // text ("\b" can't split a digit run, so years never match)
+      const salvage = (text: string, failure: string) => {
+        const score = text.match(/\b(10|[1-9])(?:-(10|[1-9]))?\b/);
+        if (score) {
+          emit({
+            type: "verdict",
+            predicted: score[2] ? `${score[1]}-${score[2]}` : score[1],
+            why: text.slice(0, 400),
+          });
+        } else {
+          emit({ type: "error", message: failure });
+        }
+      };
+
       const wanted = new Set([norm(title), ...(year ? [norm(`${title} (${year})`)] : [])]);
 
       // a wiki/movies/ page means SEEN — return the actual rating, no show.
@@ -76,6 +94,14 @@ export async function POST(req: Request) {
           : "";
         const message = `Predict the user's score for: ${title}${year ? ` (${year})` : ""} [${media}, TMDB id ${id}].${facts}`;
 
+        if (engineName() === "api") {
+          const ac = new AbortController();
+          req.signal.addEventListener("abort", () => ac.abort());
+          const { finalText, ok } = await runApiPredictTurn(message, emit, ac.signal);
+          if (!sawVerdict && !req.signal.aborted) salvage(ok ? finalText : "", ok ? "no verdict produced" : "prediction failed");
+          return;
+        }
+
         let lastThinkEmit = 0;
         const { q, finish } = runPredictTurn(message, emit);
         currentQ = q;
@@ -107,24 +133,8 @@ export async function POST(req: Request) {
               }
             }
             if (m.type === "result") {
-              if (!sawVerdict) {
-                // model ended without calling verdict — salvage a score from its
-                // final text ("\b" can't split a digit run, so years never match)
-                const text = m.subtype === "success" ? String(m.result ?? "") : "";
-                const score = text.match(/\b(10|[1-9])(?:-(10|[1-9]))?\b/);
-                if (score) {
-                  emit({
-                    type: "verdict",
-                    predicted: score[2] ? `${score[1]}-${score[2]}` : score[1],
-                    why: text.slice(0, 400),
-                  });
-                } else {
-                  emit({
-                    type: "error",
-                    message: m.subtype === "success" ? "no verdict produced" : m.subtype,
-                  });
-                }
-              }
+              if (!sawVerdict)
+                salvage(m.subtype === "success" ? String(m.result ?? "") : "", m.subtype === "success" ? "no verdict produced" : m.subtype);
               break; // streaming input mode: the query idles after a result
             }
           }

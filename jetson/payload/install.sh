@@ -127,6 +127,8 @@ rsync -a "$PAYLOAD_DIR/app/" "$OPT/app/"
 cp -n "$PAYLOAD_DIR/config/gardener.conf" "$ETC/gardener.conf"
 cp -n "$PAYLOAD_DIR/models.catalog" "$OPT/models.catalog"
 install -m 755 "$PAYLOAD_DIR/setup-wizard.sh" "$OPT/setup-wizard.sh"
+install -m 755 "$PAYLOAD_DIR/update.sh" "$OPT/update.sh"
+install -m 755 "$PAYLOAD_DIR/host-mode.sh" "$OPT/host-mode.sh"
 install -m 755 "$PAYLOAD_DIR/wikigardener" /usr/local/bin/wikigardener
 # login hint until setup is done
 cat > /etc/profile.d/wikigardener-setup.sh <<'EOF'

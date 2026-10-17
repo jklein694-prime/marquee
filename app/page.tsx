@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import ChatPane, { ChatSend, TraceEntry } from "@/components/ChatPane";
+import PushToggle from "@/components/PushToggle";
 import GraphView from "@/components/GraphView";
 import Watchlist from "@/components/Watchlist";
 import QuickRate from "@/components/QuickRate";
@@ -15,6 +16,7 @@ const KIND_STYLE: Record<TraceEntry["kind"], string> = {
   tool: "text-foreground",
   error: "text-ember",
   result: "text-glow",
+  model: "text-muted",
 };
 
 function Booth({ entries }: { entries: TraceEntry[] }) {
@@ -102,6 +104,7 @@ function MorePanel({ onPick }: { onPick: (p: Panel) => void }) {
           <div className="mt-1 text-xs text-muted">{desc}</div>
         </button>
       ))}
+      <PushToggle />
     </div>
   );
 }
@@ -111,6 +114,7 @@ export default function Home() {
   const [panel, setPanel] = useState<Panel>(null);
   const [graphMode, setGraphMode] = useState<"2d" | "3d">("2d");
   const [trace, setTrace] = useState<TraceEntry[]>([]);
+  const [model, setModel] = useState<string | null>(null);
   const chatSend = useRef<ChatSend>(() => false);
 
   return (
@@ -135,7 +139,17 @@ export default function Home() {
             <h1 className="text-lg font-semibold tracking-wide text-glow">
               Marquee
             </h1>
-            <span className="text-xs text-muted">your movie & TV expert</span>
+            <span className="flex min-w-0 flex-col leading-tight">
+              <span className="text-xs text-muted">your movie & TV expert</span>
+              {model && (
+                <span
+                  title="model the API served for the last reply"
+                  className="truncate font-mono text-[10px] text-muted/70"
+                >
+                  {model}
+                </span>
+              )}
+            </span>
             {!panel && (
               <span className="ml-auto hidden gap-1 md:flex">
                 {TABS.map(([id, label]) => (
@@ -154,6 +168,7 @@ export default function Home() {
             onTurnEnd={() => setGraphVersion((v) => v + 1)}
             onTrace={(t) => {
               setTrace((prev) => [...prev, t]);
+              if (t.kind === "model") setModel(t.label);
               // live 3D show: map wiki-touching tool calls to graph activations
               const ev = traceToThinking(t);
               if (ev) emitThinking(ev);

@@ -235,13 +235,34 @@ signals, rewrite the hub's ~15-bullet taste digest, and date-stamp superseded cl
 `Taste Profile.md` (claims are never silently deleted — taste drift is data). Cheap
 incremental updates drift; the periodic rebuild is what keeps the indexes trustworthy.
 
+### How the chat runs
+
+Each message becomes a **background turn on the server**: the browser starts it
+(`POST /api/turns`), then streams its events (`GET /api/turns/<id>?after=N`).
+Closing the tab, a phone switching apps, or a network drop only ends the
+stream — the turn finishes anyway, and the app reconnects from the last event
+it saw (after a reload it rebuilds the conversation from the server). Only Stop
+ends a turn early. Turns and conversations are kept under `data/`.
+
+The chat engine is picked automatically:
+
+- **`ANTHROPIC_API_KEY` set** — the Claude API engine (`lib/engine/`): a tool
+  loop on `claude-sonnet-5-5` with in-process, vault-confined file tools,
+  parallel tool calls, subagents as parallel API calls, and prompt caching.
+- **Only a Claude login / `CLAUDE_CODE_OAUTH_TOKEN`** — the Claude Agent SDK
+  engine (spawns Claude Code per turn; slower, but works with a subscription).
+
+Force one with `MARQUEE_ENGINE=api|agent-sdk`. Served over HTTPS, the app is an
+installable PWA with push notifications for replies that finish while it's in
+the background (More -> Notifications).
+
 ## Deploying / keeping it running
 
 Marquee is meant to run as a **persistent process on a machine you own** — your laptop, a home
 server, a spare PC — not on a serverless/edge platform like Vercel. Two reasons: the wiki is a
 real folder on disk (`VAULT_PATH`), which serverless functions don't reliably persist between
-requests, and the chat expert runs Claude Code's own executable as a long-lived subprocess,
-which serverless functions aren't built to host. Running it yourself, on your own hardware, is
+requests, and chat turns run as long-lived background jobs on the server (and, without an API
+key, as a Claude Code subprocess), which serverless functions aren't built to host. Running it yourself, on your own hardware, is
 the whole design — not a limitation to work around.
 
 For everyday use, `npm run dev` in a terminal you leave open is enough. For something closer to
@@ -295,6 +316,7 @@ works on an iPad, another laptop, or a phone. The UI is browser-based and works 
 npm run dev      # start the dev server
 npm run build    # production build
 npm run start    # serve the production build
+npm test         # unit tests (vitest): engine, tools, background turns, push
 ```
 
 ## Tech

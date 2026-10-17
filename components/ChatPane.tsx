@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { WIKILINK } from "@/lib/wikilink";
 import { OptionPicker, MovieCards, MovieChecklist, OptionsData, RecsData, ChecklistData } from "./Widgets";
+import { clearChat, followTurn, loadChat, saveChat, startTurn, stopTurn, type ClientTurnEvent } from "@/lib/turnClient";
 
 export function Markdown({ text }: { text: string }) {
   return (
@@ -64,7 +65,7 @@ export type ChatSend = (
 ) => "sent" | "queued" | false;
 
 export interface TraceEntry {
-  kind: "init" | "tool" | "error" | "result";
+  kind: "init" | "tool" | "error" | "result" | "model";
   sub?: boolean;
   label: string;
   detail?: string;
@@ -204,7 +205,8 @@ export default function ChatPane({
   // messages that arrived mid-turn — nothing sent while busy is ever dropped
   const busyRef = useRef(false);
   const queueRef = useRef<{ text: string; onDone?: () => void }[]>([]);
-  const abortRef = useRef<AbortController | null>(null);
+  // the chat lane's running turn, for the Stop button
+  const currentTurnRef = useRef<string | null>(null);
   // background lane: silent turns (watchlist logging, veto edits) run on their
   // OWN session with their own queue, fully concurrent with the chat lane —
   // logging never locks the chat and the chat never delays a log. Cross-lane
@@ -218,6 +220,45 @@ export default function ChatPane({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
   }, [messages]);
+
+  // rebuild the conversation after a reload — iOS often discards a
+  // backgrounded home-screen app — by replaying each saved turn from the
+  // server; a turn that is still running is picked up live
+  const restoredRef = useRef(false);
+  // true while saved turns are replayed: new sends queue until it's over
+  const restoringRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    const saved = loadChat();
+    if (!saved.turns.length) return;
+    sessionRef.current = saved.sessionId;
+    restoringRef.current = true;
+    void (async () => {
+      try {
+        for (let i = 0; i < saved.turns.length; i++) {
+          const t = saved.turns[i];
+          await run(t.text, undefined, false, undefined, { turnId: t.id, replay: i < saved.turns.length - 1 });
+        }
+      } finally {
+        restoringRef.current = false;
+        // anything typed during the restore goes out now, in order
+        const next = queueRef.current.shift();
+        if (next) void run(next.text, next.onDone);
+        else {
+          busyRef.current = false;
+          setBusy(false);
+        }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function newChat() {
+    clearChat();
+    sessionRef.current = undefined;
+    setMessages([]);
+  }
 
   useEffect(() => {
     if (!busy) return;
@@ -235,7 +276,7 @@ export default function ChatPane({
       void run(text, onDone, true, opts.tag);
       return "sent";
     }
-    if (busyRef.current) {
+    if (busyRef.current || restoringRef.current) {
       queueRef.current.push({ text, onDone });
       return "queued";
     }
@@ -244,7 +285,17 @@ export default function ChatPane({
   };
   if (sendRef) sendRef.current = send;
 
-  async function run(text: string, onDone?: () => void, silent?: boolean, tag = "watchlist-log") {
+  // existing: attach to a turn that is already running/finished (restoring the
+  // transcript after a reload) instead of starting one. replay: an earlier,
+  // finished turn — rebuild its messages without re-animating the booth.
+  async function run(
+    text: string,
+    onDone?: () => void,
+    silent?: boolean,
+    tag = "watchlist-log",
+    existing?: { turnId: string; replay?: boolean }
+  ) {
+    const replay = !!existing?.replay;
     if (silent) {
       logBusyRef.current = true;
     } else {
@@ -264,104 +315,103 @@ export default function ChatPane({
       ]);
     }
 
-    // Stop button aborts the chat lane only — background logs always finish
-    const controller = silent ? null : new AbortController();
-    if (controller) abortRef.current = controller;
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const turnId =
+        existing?.turnId ??
+        (await startTurn({
           // tagged here (single place) so the prompt's silent-turn carve-outs
           // and the flag can't drift apart
           message: silent ? `<${tag}>\n${text}\n</${tag}>` : text,
           sessionId: silent ? logSessionRef.current : sessionRef.current,
-        }),
-        signal: controller?.signal,
-      });
-      const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split("\n\n");
-        buffer = events.pop()!;
-        for (const raw of events) {
-          if (!raw.startsWith("data: ")) continue;
-          const ev = JSON.parse(raw.slice(6));
-          if (ev.type === "text" && silent) {
-            // silent turns render nothing in the transcript
-          } else if (ev.type === "widget" && silent) {
-            // prompt forbids widgets in silent turns; if one slips through,
-            // dropping it is safest — the next message resumes the session
-          } else if (ev.type === "status") {
-            // live generation status (thinking…, preparing Edit…) — fills the
-            // long silent stretches between trace lines. Chat lane only: the
-            // busy strip belongs to the chat; background logs stay invisible.
-            if (!silent)
-              setActivity(ev.label ? `${ev.label}${ev.detail ? ` ${ev.detail}` : ""}` : "working…");
-          } else if (ev.type === "text") {
-            setMessages((m) => {
-              const next = [...m];
-              // append to the last assistant bubble, or open a new one after a widget
-              const last = next[next.length - 1];
-              if (last?.role === "assistant") {
-                next[next.length - 1] = { role: "assistant", text: last.text + ev.delta };
-              } else {
-                next.push({ role: "assistant", text: ev.delta });
-              }
-              return next;
-            });
-          } else if (ev.type === "widget") {
-            setMessages((m) => {
-              // drop duplicate widget re-calls within the same turn
-              const dup = m.some(
-                (msg) =>
-                  msg.role === "widget" &&
-                  msg.widget === ev.widget &&
-                  JSON.stringify(msg.data) === JSON.stringify(ev.data)
-              );
-              if (dup) return m;
-              const w: Msg =
-                ev.widget === "options"
-                  ? { role: "widget", widget: "options", data: ev.data, answered: false }
-                  : ev.widget === "checklist"
-                    ? { role: "widget", widget: "checklist", data: ev.data, answered: false }
-                    : { role: "widget", widget: "recs", data: ev.data };
-              return [...m, w];
-            });
-          } else if (ev.type === "trace") {
-            onTrace({ ...ev, at: new Date().toLocaleTimeString() });
-            if (!silent) {
-              const label = activityLabel(ev);
-              if (label) setActivity(label);
-            }
-          } else if (ev.type === "done") {
-            if (silent) logSessionRef.current = ev.sessionId ?? logSessionRef.current;
-            else sessionRef.current = ev.sessionId ?? sessionRef.current;
-          }
+          silent,
+        }));
+      if (!silent) {
+        currentTurnRef.current = turnId;
+        if (!existing) {
+          const saved = loadChat();
+          saveChat({ ...saved, turns: [...saved.turns, { id: turnId, text }] });
         }
       }
+      // the turn runs on the server whether or not we're connected;
+      // followTurn reconnects (after the app was backgrounded, a network
+      // blip, a reload) and resumes from the last event it saw
+      await followTurn(turnId, (ev: ClientTurnEvent) => {
+        if (ev.type === "text" && silent) {
+          // silent turns render nothing in the transcript
+        } else if (ev.type === "widget" && silent) {
+          // prompt forbids widgets in silent turns; if one slips through,
+          // dropping it is safest — the next message resumes the session
+        } else if (ev.type === "status") {
+          // live generation status (thinking…, preparing Edit…) — fills the
+          // long silent stretches between trace lines. Chat lane only: the
+          // busy strip belongs to the chat; background logs stay invisible.
+          if (!silent)
+            setActivity(ev.label ? `${ev.label}${ev.detail ? ` ${ev.detail}` : ""}` : "working…");
+        } else if (ev.type === "text") {
+          setMessages((m) => {
+            const next = [...m];
+            // append to the last assistant bubble, or open a new one after a widget
+            const last = next[next.length - 1];
+            const delta = String(ev.delta ?? "");
+            if (last?.role === "assistant") {
+              next[next.length - 1] = { role: "assistant", text: last.text + delta };
+            } else {
+              next.push({ role: "assistant", text: delta });
+            }
+            return next;
+          });
+        } else if (ev.type === "widget") {
+          setMessages((m) => {
+            // drop duplicate widget re-calls within the same turn
+            const dup = m.some(
+              (msg) =>
+                msg.role === "widget" &&
+                msg.widget === ev.widget &&
+                JSON.stringify(msg.data) === JSON.stringify(ev.data)
+            );
+            if (dup) return m;
+            const w: Msg =
+              ev.widget === "options"
+                ? { role: "widget", widget: "options", data: ev.data as OptionsData, answered: false }
+                : ev.widget === "checklist"
+                  ? { role: "widget", widget: "checklist", data: ev.data as ChecklistData, answered: false }
+                  : { role: "widget", widget: "recs", data: ev.data as RecsData };
+            return [...m, w];
+          });
+        } else if (ev.type === "trace") {
+          const t = ev as unknown as Omit<TraceEntry, "at">;
+          if (!replay) onTrace({ ...t, at: new Date().toLocaleTimeString() });
+          if (!silent) {
+            const label = activityLabel(t);
+            if (label) setActivity(label);
+          }
+        } else if (ev.type === "done") {
+          const sid = ev.sessionId as string | undefined;
+          if (silent) logSessionRef.current = sid ?? logSessionRef.current;
+          else {
+            sessionRef.current = sid ?? sessionRef.current;
+            saveChat({ ...loadChat(), sessionId: sessionRef.current });
+          }
+        }
+      });
     } catch (err) {
       if (silent) {
         // no UI surface for a background failure — the turn-end refetch
         // reconciles state and the item simply stays put for a retry
         console.error("background turn failed:", err);
-      } else if (err instanceof DOMException && err.name === "AbortError") {
+      } else {
+        // the turn could not even be started (server unreachable for a while)
         setMessages((m) => {
           const next = [...m];
           const last = next[next.length - 1];
-          if (last?.role === "assistant") next[next.length - 1] = { role: "assistant", text: last.text + "\n\n_(stopped)_" };
+          const note = "_(couldn't reach Marquee — check the connection and send again)_";
+          if (last?.role === "assistant") next[next.length - 1] = { role: "assistant", text: last.text + note };
           return next;
         });
-      } else {
-        throw err;
       }
     } finally {
       onDone?.();
-      onTurnEnd();
+      if (!replay) onTurnEnd();
       if (silent) {
         const next = logQueueRef.current.shift();
         if (next) {
@@ -370,9 +420,11 @@ export default function ChatPane({
           logBusyRef.current = false;
         }
       } else {
-        abortRef.current = null;
+        currentTurnRef.current = null;
         // drop empty assistant bubbles (e.g. turn ended on a widget)
         setMessages((m) => m.filter((msg) => !(msg.role === "assistant" && !msg.text.trim())));
+        // mid-restore the restore loop owns the queue and the busy flag
+        if (existing && restoringRef.current) return;
         const next = queueRef.current.shift();
         if (next) {
           void run(next.text, next.onDone); // drain — busy stays up across the queue
@@ -387,6 +439,16 @@ export default function ChatPane({
   return (
     <>
       <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+        {messages.length > 0 && !busy && (
+          <div className="flex justify-end">
+            <button
+              onClick={newChat}
+              className="cursor-pointer rounded border border-card-border px-2 py-0.5 text-[11px] text-muted hover:border-glow/60 hover:text-glow"
+            >
+              New chat
+            </button>
+          </div>
+        )}
         {messages.length === 0 && (
           <div className="mx-auto mt-10 max-w-sm text-center">
             <LouieHero />
@@ -448,7 +510,9 @@ export default function ChatPane({
           </span>
           <span className="text-xs text-glow/90">{activity}</span>
           <button
-            onClick={() => abortRef.current?.abort()}
+            onClick={() => {
+              if (currentTurnRef.current) void stopTurn(currentTurnRef.current);
+            }}
             className="cursor-pointer rounded border border-card-border px-2 py-0.5 text-[11px] text-muted hover:border-glow/60 hover:text-glow"
           >
             Stop

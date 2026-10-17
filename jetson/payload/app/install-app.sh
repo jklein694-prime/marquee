@@ -9,15 +9,13 @@
 # glibc — so it runs inside a Docker container (containers bring their own
 # libc). JetPack ships Docker.
 #
-# HONEST CAVEATS (hardware-verify):
-#   - Node-20 container on JetPack 4.6's 4.9 kernel is believed-working but
-#     unverified here. If the container won't start, use the fallback below.
-#   - RAM is tight: llama-server holds ~1.5-2.6GB of the 4GB. The app service
-#     is capped at 700MB and llama-server may need the 0.5b model tier when
-#     both run. On a 2GB Nano, don't run both.
-#   - The chat panel calls the Claude API — it works during online windows
-#     (key from /etc/wikigardener/anthropic.key); graph/wiki browsing is
-#     fully offline.
+# NOTES:
+#   - The chat calls the Claude API (key from /etc/wikigardener/anthropic.key;
+#     a subscription token in claude-oauth.token works too, on the slower
+#     Agent SDK engine); graph/wiki browsing is fully offline.
+#   - Memory: with the on-device AI retired (host-mode.sh) the app gets 2GB;
+#     while llama-server is still installed it stays capped at 700MB.
+#     Override with APP_MEMORY=<docker -m value>.
 # FALLBACK: run the app on your laptop against a synced clone of the vault
 #   (git sync keeps it fresh):  VAULT_PATH=~/vault npm run dev
 set -euo pipefail
@@ -27,6 +25,17 @@ APP_DIR=/opt/wikigardener/app-src
 VAULT=/var/lib/wikigardener/vault
 KEY_FILE=/etc/wikigardener/anthropic.key
 IMAGE=node:20-bookworm-slim
+if [ -z "${APP_MEMORY:-}" ]; then
+  if [ -e /etc/systemd/system/llama-server.service ]; then APP_MEMORY=700m; else APP_MEMORY=2g; fi
+fi
+# Node's heap: ~75% of the container limit, so V8 gives memory back before
+# docker's OOM killer has to
+case "$APP_MEMORY" in
+  *[gG]) MEM_MB=$(( ${APP_MEMORY%[gG]} * 1024 )) ;;
+  *[mM]) MEM_MB=${APP_MEMORY%[mM]} ;;
+  *) MEM_MB=2048 ;;
+esac
+HEAP_MB=$(( MEM_MB * 3 / 4 ))
 
 [ "$(id -u)" = 0 ] || { echo "run as root: sudo bash install-app.sh <repo-url>" >&2; exit 1; }
 [ -n "$REPO_URL" ] || [ -d "$APP_DIR" ] || {
@@ -43,8 +52,13 @@ EOF
 fi
 
 echo "== fetching the app"
-if [ -d "$APP_DIR/.git" ]; then
-  git -C "$APP_DIR" pull --ff-only || echo "   (pull failed — building what's here)"
+if [ "${WG_SKIP_PULL:-}" = 1 ]; then
+  echo "   (checkout already updated by wikigardener update)"
+elif [ -d "$APP_DIR/.git" ]; then
+  git -C "$APP_DIR" pull --ff-only || {
+    echo "FATAL: git pull failed — run 'sudo wikigardener update' instead," >&2
+    echo "       which repairs a checkout with no origin/upstream." >&2
+    exit 1; }
 else
   git clone --depth 1 "$REPO_URL" "$APP_DIR"
 fi
@@ -97,7 +111,8 @@ Requires=docker.service
 [Service]
 ExecStartPre=-/usr/bin/docker rm -f wikigardener-app
 ExecStart=/usr/bin/docker run --name wikigardener-app --rm \\
-  -p 3000:3000 -m 700m \\
+  -p 3000:3000 -m $APP_MEMORY \\
+  -e NODE_OPTIONS=--max-old-space-size=$HEAP_MB \\
   -v $APP_DIR:/app -w /app \\
   -v $VAULT:/vault \\
   -e VAULT_PATH=/vault \\
@@ -114,7 +129,11 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
-systemctl enable --now wikigardener-app.service
+# enable --now is a no-op when the unit is already active, which left the OLD
+# container serving a rebuilt .next (its manifest pointed at deleted CSS/JS
+# chunks: an unstyled page). Always restart so the new build is what's served.
+systemctl enable wikigardener-app.service
+systemctl restart wikigardener-app.service
 
 IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 cat <<EOF
@@ -122,7 +141,7 @@ cat <<EOF
 == app installed ==
   open:      http://${IP:-<nano-ip>}:3000     (graph view + wiki + chat)
   status:    systemctl status wikigardener-app
-  update:    re-run this script during an online window (pulls + rebuilds)
+  update:    sudo wikigardener update   (pulls + rebuilds; safe to disconnect)
   NOTE: the vault is mounted read-write (chat writes pages directly via the
   page-writer subagent); the gardener also writes on its own timer. Both go
   through git, which serializes commits itself — a rare overlap fails one
