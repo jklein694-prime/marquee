@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import type { GraphNode, GraphLink } from "@/lib/vault";
+import type { GraphNode, GraphLink, GraphCluster } from "@/lib/vault";
 import {
   useHeatEngine,
   SpotCard,
@@ -15,6 +15,7 @@ import {
 import { TitleSearch, type SearchResult } from "./QuickRate";
 
 const Graph3D = dynamic(() => import("./Graph3D"), { ssr: false });
+import { clusterLinkColor } from "./graph/labels";
 
 type GhostSet = { nodes: GraphNode[]; links: GraphLink[] };
 const EMPTY_GHOSTS: GhostSet = { nodes: [], links: [] };
@@ -55,10 +56,11 @@ type PredictEvent =
 export default function PredictPanel() {
   const [phase, setPhase] = useState<Phase>("search");
   const [picked, setPicked] = useState<SearchResult | null>(null);
-  const [graph, setGraph] = useState<{ nodes: GraphNode[]; links: GraphLink[] }>({
-    nodes: [],
-    links: [],
-  });
+  const [graph, setGraph] = useState<{
+    nodes: GraphNode[];
+    links: GraphLink[];
+    clusters: GraphCluster[];
+  }>({ nodes: [], links: [], clusters: [] });
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [onList, setOnList] = useState(false);
   const [status, setStatus] = useState("");
@@ -96,7 +98,11 @@ export default function PredictPanel() {
       return `rgba(${r},${g},${b},${a})`;
     },
     coldLink: (l) =>
-      (l as { ghost?: boolean }).ghost ? "rgba(232,220,200,0.3)" : "#2a221a",
+      (l as { ghost?: boolean }).ghost
+        ? "rgba(232,220,200,0.3)"
+        : clusterLinkColor(l as unknown as GraphLink),
+    coldLinkWidth: () => 0, // 1px lines when cold; slim tubes only while hot
+    hotLinkWidth: (hp) => 0.3 + 0.7 * hp,
   });
   heatEmptyRef.current = engine.heatRef.current.size === 0;
 
@@ -313,6 +319,8 @@ export default function PredictPanel() {
           width={size.width}
           height={size.height}
           graphData={liveData}
+          clusters={graph.clusters}
+          heatRef={engine.heatRef}
           backgroundColor="#0c0a08"
           controlType="orbit"
           showNavInfo={false}

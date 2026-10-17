@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import type { GraphNode, GraphLink } from "@/lib/vault";
+import type { ForceGraphMethods as FG2D } from "react-force-graph-2d";
+import type { GraphCluster, GraphNode, GraphLink } from "@/lib/vault";
 import { Markdown } from "./ChatPane";
 import {
   useHeatEngine,
@@ -14,12 +15,24 @@ import {
   heatColor,
   pinNodes,
 } from "./useHeatEngine";
+import {
+  CLUSTER_LABEL_MAX_PX,
+  LABEL_COLOR,
+  NODE_LABEL_MAX_PX,
+  clusterColor,
+  clusterLinkColor,
+  fitLabel,
+  uiFont,
+} from "./graph/labels";
+import { clusterCentroids } from "./graph/clusterForce";
 import { onThinking, type ThinkingEvent } from "@/lib/liveThinking";
 
-const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
-  ssr: false,
-});
+const Graph2D = dynamic(() => import("./Graph2D"), { ssr: false });
 const Graph3D = dynamic(() => import("./Graph3D"), { ssr: false });
+
+type GraphData = { nodes: GraphNode[]; links: GraphLink[]; clusters: GraphCluster[] };
+const EMPTY_GRAPH: GraphData = { nodes: [], links: [], clusters: [] };
+type XY = GraphNode & { x: number; y: number };
 
 // base draw radius; the 2D canvas adds a heat bump on top of this
 function nodeRadius(n: GraphNode): number {
@@ -48,6 +61,7 @@ const GHOST_TTL = 45_000;
 interface GhostOp {
   newGhost?: string; // create a ghost with this id (resolve missed)
   birthAnchor?: string; // last real spotlight at event time — attachment edge
+  cluster?: number; // the anchor's cluster — the ghost forms inside it, not at the origin
   anchor: string; // node id (real or ghost) the event centers on
   connect: string[]; // resolved wikilink target ids → anchor connects to each
 }
@@ -92,7 +106,13 @@ function growGhosts(
         const oldest = [...nodes].sort((a, b) => (a.bornAt ?? 0) - (b.bornAt ?? 0))[0];
         drop(new Set([oldest.id]));
       }
-      nodes.push({ id: op.newGhost, label: op.newGhost, kind: "ghost", bornAt: now } as GraphNode);
+      nodes.push({
+        id: op.newGhost,
+        label: op.newGhost,
+        kind: "ghost",
+        cluster: op.cluster,
+        bornAt: now,
+      } as GraphNode);
       changed = true;
       if (op.birthAnchor) addEdge(op.newGhost, op.birthAnchor);
     }
@@ -100,6 +120,20 @@ function growGhosts(
   }
   return changed ? { nodes, links } : g;
 }
+
+// --- 2D label placement: greedy, priority-ordered, no overlaps ---------------
+interface LabelCandidate {
+  x: number; // canvas coords (pre-scale)
+  y: number;
+  r: number; // node radius the label sits under
+  text: string;
+  priority: number;
+  color: string;
+  weight: number;
+}
+interface Rect { x0: number; y0: number; x1: number; y1: number }
+const overlaps = (a: Rect, b: Rect) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 export default function GraphView({
   version,
@@ -110,10 +144,7 @@ export default function GraphView({
   mode: "2d" | "3d";
   onModeChange: (m: "2d" | "3d") => void;
 }) {
-  const [data, setData] = useState<{ nodes: GraphNode[]; links: GraphLink[] }>({
-    nodes: [],
-    links: [],
-  });
+  const [data, setData] = useState<GraphData>(EMPTY_GRAPH);
   const [ghosts, setGhosts] = useState<GhostSet>(EMPTY_GHOSTS);
   const ghostsRef = useRef(ghosts);
   ghostsRef.current = ghosts;
@@ -124,17 +155,22 @@ export default function GraphView({
   const [size, setSize] = useState({ width: 600, height: 600 });
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [wiki, setWiki] = useState<WikiState | null>(null);
+  const [legendOpen, setLegendOpen] = useState(false);
+  const [clusterFilter, setClusterFilter] = useState<number | null>(null);
+  const fg2dRef = useRef<FG2D | undefined>(undefined);
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
   // turn end: refetch and clear ghosts in ONE render — candidates that became
   // real pages reappear as permanent nodes, the rest dissolve
   useEffect(() => {
     fetch("/api/graph")
       .then((r) => r.json())
-      .then((d) => {
+      .then((d: Partial<GraphData>) => {
         pendingOpsRef.current = [];
         lastRealSpotRef.current = null;
         setGhosts(EMPTY_GHOSTS);
-        setData(d);
+        setData({ nodes: d.nodes ?? [], links: d.links ?? [], clusters: d.clusters ?? [] });
       })
       .catch(() => {});
   }, [version]);
@@ -154,8 +190,9 @@ export default function GraphView({
   realRef.current = { realIds, realEdges };
   const dataRef = useRef(data);
   dataRef.current = data;
+  const clusterById = useMemo(() => new Map(data.clusters.map((c) => [c.id, c])), [data]);
 
-  // merged view the 3D graph + engine consume; identity changes only when a
+  // merged view the graphs + engine consume; identity changes only when a
   // flush lands (load-bearing: per-render churn would keep the d3 sim boiling)
   const liveData = useMemo(
     () =>
@@ -164,6 +201,13 @@ export default function GraphView({
         : data,
     [data, ghosts]
   );
+  const degree = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of liveData.links) {
+      for (const id of [endId(l.source), endId(l.target)]) m.set(id, (m.get(id) ?? 0) + 1);
+    }
+    return m;
+  }, [liveData]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -200,17 +244,27 @@ export default function GraphView({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [selected]);
 
-  const neighborIds = useMemo(() => {
-    if (!selected) return null;
-    const ids = new Set([selected.id]);
-    for (const l of data.links) {
-      const s = endId(l.source);
-      const t = endId(l.target);
-      if (s === selected.id) ids.add(t);
-      if (t === selected.id) ids.add(s);
+  // focus = what stays bright while the rest dims: a selection with its
+  // neighbors, else a cluster picked from the legend
+  const focusIds = useMemo(() => {
+    if (selected) {
+      const ids = new Set([selected.id]);
+      for (const l of data.links) {
+        const s = endId(l.source);
+        const t = endId(l.target);
+        if (s === selected.id) ids.add(t);
+        if (t === selected.id) ids.add(s);
+      }
+      return ids;
     }
-    return ids;
-  }, [selected, data]);
+    if (clusterFilter !== null)
+      return new Set(data.nodes.filter((n) => n.cluster === clusterFilter).map((n) => n.id));
+    return null;
+  }, [selected, clusterFilter, data]);
+  const focusRef = useRef(focusIds);
+  focusRef.current = focusIds;
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
 
   const linkActive = (l: GraphLink) =>
     !!selected &&
@@ -224,21 +278,29 @@ export default function GraphView({
     // shimmer needs render ticks while the stream is active but nothing is hot
     tickWhenIdle: () => Date.now() - lastEventAtRef.current < 6000,
     coldNode: (n) => {
-      if (neighborIds)
-        return neighborIds.has(n.id) ? nodeColor(n) : withAlpha(nodeColor(n), 0.12);
+      if (focusIds)
+        return focusIds.has(n.id) ? nodeColor(n) : withAlpha(nodeColor(n), 0.12);
       if (liveHeatRef.current) return withAlpha(nodeColor(n), 0.3);
       // stream active, nothing hot yet — the whole graph breathes ("indexing")
       if (Date.now() - lastEventAtRef.current < 6000)
         return withAlpha(nodeColor(n), 0.38 + 0.12 * Math.sin(Date.now() / 250));
       return nodeColor(n);
     },
-    coldLink: (l) =>
-      (l as { ghost?: boolean }).ghost
-        ? "rgba(232,220,200,0.25)"
-        : linkActive(l as unknown as GraphLink)
-          ? "#f5b942"
-          : "#2a221a",
-    coldLinkWidth: (l) => (linkActive(l as unknown as GraphLink) ? 2 : 1),
+    coldLink: (l) => {
+      const gl = l as unknown as GraphLink;
+      if ((l as { ghost?: boolean }).ghost) return "rgba(232,220,200,0.25)";
+      if (linkActive(gl)) return "#f5b942";
+      if (focusIds) {
+        const inFocus = focusIds.has(endId(gl.source)) && focusIds.has(endId(gl.target));
+        return inFocus ? clusterLinkColor(gl, 0.6) : "rgba(42,34,26,0.3)";
+      }
+      return clusterLinkColor(gl);
+    },
+    // 3D: cold edges are 1px GL lines (width 0), tubes only when hot/active —
+    // cleaner and far cheaper than a tube per edge. 2D needs a real width.
+    coldLinkWidth: (l) =>
+      linkActive(l as unknown as GraphLink) ? 1.6 : modeRef.current === "3d" ? 0 : 1,
+    hotLinkWidth: (hp) => (modeRef.current === "3d" ? 0.3 + 0.7 * hp : 1 + 2 * hp),
   });
   liveHeatRef.current = engine.heatRef.current.size > 0;
 
@@ -260,11 +322,18 @@ export default function GraphView({
   }, []);
 
   // live show: Louie's chat/silent-turn activity lights the graph while this
-  // tab is open in 3D — purely observational, dropped when unmounted
+  // tab is open — purely observational, dropped when unmounted
   const [liveLabel, setLiveLabel] = useState("");
   const liveTimerRef = useRef(0);
   const lastSpotRef = useRef(0);
   useEffect(() => {
+    const clusterOf = (id: string | null | undefined) => {
+      if (!id) return undefined;
+      return (
+        dataRef.current.nodes.find((n) => n.id === id)?.cluster ??
+        ghostsRef.current.nodes.find((n) => n.id === id)?.cluster
+      );
+    };
     return onThinking((ev) => {
       lastEventAtRef.current = Date.now();
       setLiveLabel(VERB_TEXT[ev.verb]);
@@ -301,6 +370,7 @@ export default function GraphView({
         pendingOpsRef.current.push({
           newGhost: hit ? undefined : ev.key,
           birthAnchor: hit ? undefined : lastRealSpotRef.current ?? undefined,
+          cluster: hit ? undefined : clusterOf(lastRealSpotRef.current) ?? clusterOf(linked[0]?.id),
           anchor: anchorId,
           connect: linked.map((h) => h.id),
         });
@@ -310,25 +380,249 @@ export default function GraphView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 2D camera follow: glide to each new spotlight unless the user panned
+  // recently — "watching the graph" gets the live feel without a fight
+  const userPanAtRef = useRef(0);
+  const programmaticUntilRef = useRef(0);
+  useEffect(() => {
+    if (mode !== "2d" || !engine.spot) return;
+    const fg = fg2dRef.current;
+    const n = liveData.nodes.find((x) => x.id === engine.spot!.id) as XY | undefined;
+    if (!fg || !n || n.x === undefined) return;
+    if (Date.now() - userPanAtRef.current < 4000) return;
+    programmaticUntilRef.current = Date.now() + 1000;
+    fg.centerAt(n.x, n.y, 800);
+    // liveData identity is the sim's data; the spot id is what matters here
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine.spot?.id, mode]);
+
+  // --- 2D paint state (per frame, via refs: the canvas repaints at 60fps) ---
+  const labelsRef = useRef<LabelCandidate[]>([]);
+  const centroidsRef = useRef(clusterCentroids([]));
+  const fontRef = useRef<string | null>(null);
+  const font = () => (fontRef.current ??= uiFont());
+
+  const isDimmed = (id: string) => {
+    const f = focusRef.current;
+    return f ? !f.has(id) : false;
+  };
+
+  const renderPre = (ctx: CanvasRenderingContext2D, scale: number) => {
+    labelsRef.current = [];
+    const cents = clusterCentroids(liveData.nodes);
+    centroidsRef.current = cents;
+    // soft fields under each cluster — regions, not outlines
+    const f = focusRef.current;
+    for (const [id, c] of cents) {
+      if (c.n < 3) continue;
+      const r = Math.max(40, c.spread * 1.7);
+      const dim = f && clusterFilter !== null && clusterFilter !== id;
+      const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
+      const col = clusterColor(id);
+      g.addColorStop(0, withAlpha(col, dim ? 0.03 : 0.11));
+      g.addColorStop(0.7, withAlpha(col, dim ? 0.012 : 0.045));
+      g.addColorStop(1, withAlpha(col, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, r, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+    void scale;
+  };
+
+  const paintNode = (node: object, ctx: CanvasRenderingContext2D, scale: number) => {
+    const n = node as XY;
+    // reading heat through refs keeps the 2D view exactly as live as the 3D one
+    const h = engine.heatRef.current.get(n.id) ?? 0;
+    const base = nodeColor(n);
+    const color = h > 0.05 ? heatColor(base, h) : base;
+    const r = nodeRadius(n) + h * 4;
+    const dimmed = isDimmed(n.id);
+    const isSelected = selectedRef.current?.id === n.id;
+    // 8-digit hex (watchlist, ghost) carries its own translucency
+    let alpha = base.length === 9 ? parseInt(base.slice(7, 9), 16) / 255 : 1;
+    if (dimmed) alpha = 0.15;
+    else if (h <= 0.05) {
+      if (liveHeatRef.current) alpha = 0.35;
+      else if (Date.now() - lastEventAtRef.current < 6000)
+        alpha = 0.42 + 0.12 * Math.sin(Date.now() / 250);
+    }
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    // glow = two soft rings instead of shadowBlur (which costs a full-canvas blur per node)
+    const [cr, cg, cb] = rgbOf(color);
+    const halo = h > 0.05 ? 0.18 + 0.3 * h : n.kind === "genre" ? 0.1 : 0.07;
+    ctx.fillStyle = `rgba(${cr},${cg},${cb},${halo})`;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r * (1.7 + h), 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.fillStyle = `rgba(${cr},${cg},${cb},${halo * 1.5})`;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r * 1.25, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r, 0, 2 * Math.PI);
+    ctx.fill();
+    if (n.kind === "ghost") {
+      // forming: a dashed outline reads "not real yet"
+      ctx.strokeStyle = "rgba(232,220,200,0.6)";
+      ctx.lineWidth = 1 / scale;
+      ctx.setLineDash([2 / scale, 2 / scale]);
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r + 1.5 / scale, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+    if (isSelected) {
+      ctx.setLineDash([]);
+      ctx.strokeStyle = "#f5b942";
+      ctx.lineWidth = 1.5 / scale;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r + 3 / scale, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+    ctx.restore();
+    // label candidates: zoomed in, or emphasized (selected / focused / hot)
+    const focused = !dimmed && !!focusRef.current;
+    const nodeLabelAlpha = clamp01((scale - 0.7) / 0.4);
+    if (nodeLabelAlpha > 0 || focused || isSelected || h > 0.5) {
+      labelsRef.current.push({
+        x: n.x,
+        y: n.y,
+        r,
+        text: n.label,
+        priority: isSelected ? 1000 : h > 0.5 ? 500 + h : focused ? 200 + (degree.get(n.id) ?? 0) : (degree.get(n.id) ?? 0) + (n.kind === "genre" ? 50 : 0),
+        color: isSelected ? "#f5b942" : dimmed ? withAlpha(LABEL_COLOR, 0.25) : n.kind === "ghost" ? "#a89d90" : LABEL_COLOR,
+        weight: isSelected || n.kind === "genre" ? 600 : 400,
+      });
+    }
+  };
+
+  const renderPost = (ctx: CanvasRenderingContext2D, scale: number) => {
+    const fam = font();
+    const nodeLabelAlpha = clamp01((scale - 0.7) / 0.4);
+    const clusterLabelAlpha = clamp01((1.15 - scale) / 0.45);
+    const placed: Rect[] = [];
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.lineJoin = "round";
+    // cluster words first: they own the zoomed-out view and win placement
+    if (clusterLabelAlpha > 0) {
+      const px = 14 / scale;
+      ctx.font = `600 ${px}px ${fam}`;
+      ctx.textBaseline = "middle";
+      for (const [id, c] of centroidsRef.current) {
+        if (c.n < 3) continue;
+        const label = clusterById.get(id)?.label;
+        if (!label) continue;
+        const text = fitLabel(label, CLUSTER_LABEL_MAX_PX / scale, ctx);
+        const w = ctx.measureText(text).width;
+        const rect = { x0: c.x - w / 2 - 4 / scale, y0: c.y - px * 0.7, x1: c.x + w / 2 + 4 / scale, y1: c.y + px * 0.7 };
+        if (placed.some((p) => overlaps(p, rect))) continue;
+        placed.push(rect);
+        const dim = clusterFilter !== null && clusterFilter !== id;
+        ctx.globalAlpha = clusterLabelAlpha * (dim ? 0.3 : 0.95);
+        ctx.strokeStyle = "rgba(12,10,8,0.85)";
+        ctx.lineWidth = 4 / scale;
+        ctx.strokeText(text, c.x, c.y);
+        ctx.fillStyle = clusterColor(id);
+        ctx.fillText(text, c.x, c.y);
+      }
+    }
+    // node labels: priority order, each placed only where nothing sits yet
+    const cands = labelsRef.current.sort((a, b) => b.priority - a.priority).slice(0, 160);
+    ctx.textBaseline = "top";
+    const px = 11 / scale;
+    for (const c of cands) {
+      const emphasized = c.priority >= 200;
+      const a = emphasized ? Math.max(0.9, nodeLabelAlpha) : nodeLabelAlpha;
+      if (a <= 0.02) continue;
+      ctx.font = `${c.weight} ${px}px ${fam}`;
+      const text = fitLabel(c.text, NODE_LABEL_MAX_PX / scale, ctx);
+      const w = ctx.measureText(text).width;
+      const y = c.y + c.r + 2.5 / scale;
+      const rect = { x0: c.x - w / 2 - 2 / scale, y0: y - 1 / scale, x1: c.x + w / 2 + 2 / scale, y1: y + px * 1.25 };
+      if (placed.some((p) => overlaps(p, rect))) continue;
+      placed.push(rect);
+      ctx.globalAlpha = a;
+      ctx.strokeStyle = "rgba(12,10,8,0.8)";
+      ctx.lineWidth = 3 / scale;
+      ctx.strokeText(text, c.x, y);
+      ctx.fillStyle = c.color;
+      ctx.fillText(text, c.x, y);
+    }
+    ctx.restore();
+  };
+
+  const selectedCluster =
+    selected?.cluster !== undefined && selected.cluster >= 0 ? clusterById.get(selected.cluster) : undefined;
+
   return (
     <div ref={containerRef} className="relative h-full w-full">
       {data.nodes.length > 0 && (
-        <div className="absolute left-3 top-3 z-10 flex gap-1 rounded-md border border-card-border bg-card/80 p-1 text-xs backdrop-blur-sm">
-          {(["2d", "3d"] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => onModeChange(m)}
-              className={`rounded px-2 py-0.5 ${
-                mode === m ? "bg-glow/15 text-glow" : "text-muted hover:text-foreground"
-              }`}
-            >
-              {m.toUpperCase()}
-            </button>
-          ))}
-          {liveLabel && (
-            <span className="flex items-center gap-1.5 px-2 text-muted">
-              <span className="animate-pulse text-glow">●</span> {liveLabel}
-            </span>
+        <div className="absolute left-3 top-3 z-10 flex flex-col items-start gap-1.5">
+          <div className="flex gap-1 rounded-md border border-card-border bg-card/80 p-1 text-xs backdrop-blur-sm">
+            {(["2d", "3d"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => onModeChange(m)}
+                className={`rounded px-2 py-0.5 ${
+                  mode === m ? "bg-glow/15 text-glow" : "text-muted hover:text-foreground"
+                }`}
+              >
+                {m.toUpperCase()}
+              </button>
+            ))}
+            {data.clusters.length > 0 && (
+              <button
+                onClick={() => setLegendOpen((o) => !o)}
+                className={`rounded px-2 py-0.5 ${
+                  legendOpen || clusterFilter !== null
+                    ? "bg-glow/15 text-glow"
+                    : "text-muted hover:text-foreground"
+                }`}
+                title="Clusters"
+                aria-pressed={legendOpen}
+              >
+                Clusters
+              </button>
+            )}
+            {liveLabel && (
+              <span className="flex items-center gap-1.5 px-2 text-muted">
+                <span className="animate-pulse text-glow">●</span> {liveLabel}
+              </span>
+            )}
+          </div>
+          {legendOpen && data.clusters.length > 0 && (
+            <div className="max-h-[60vh] w-56 overflow-y-auto rounded-md border border-card-border bg-card/85 p-1.5 text-xs backdrop-blur-sm">
+              {data.clusters.map((c) => {
+                const active = clusterFilter === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => setClusterFilter((cur) => (cur === c.id ? null : c.id))}
+                    className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left ${
+                      active ? "bg-glow/10 text-foreground" : "text-muted hover:text-foreground"
+                    }`}
+                  >
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ background: clusterColor(c.id) }}
+                    />
+                    <span className="truncate">{c.label}</span>
+                    <span className="ml-auto tabular-nums opacity-60">{c.size}</span>
+                  </button>
+                );
+              })}
+              {clusterFilter !== null && (
+                <button
+                  onClick={() => setClusterFilter(null)}
+                  className="mt-1 w-full rounded px-2 py-1 text-left text-muted hover:text-foreground"
+                >
+                  Show all
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -342,6 +636,10 @@ export default function GraphView({
           width={size.width}
           height={size.height}
           graphData={liveData}
+          clusters={data.clusters}
+          heatRef={engine.heatRef}
+          focusIds={focusIds}
+          selectedId={selected?.id ?? null}
           backgroundColor="#0c0a08"
           showNavInfo={false}
           enableNodeDrag={false}
@@ -354,7 +652,8 @@ export default function GraphView({
           {...engine.graphProps}
         />
       ) : (
-        <ForceGraph2D
+        <Graph2D
+          fgRef={fg2dRef}
           width={size.width}
           height={size.height}
           graphData={liveData}
@@ -362,10 +661,13 @@ export default function GraphView({
           autoPauseRedraw={false}
           d3AlphaDecay={0.05}
           d3VelocityDecay={0.5}
+          onZoom={() => {
+            if (Date.now() > programmaticUntilRef.current) userPanAtRef.current = Date.now();
+          }}
           // pad each node's clickable area beyond its drawn radius so taps land on
           // touch screens (drawn radii are only 3.5–7px); also helps mouse aim
           nodePointerAreaPaint={(node, color, ctx) => {
-            const n = node as unknown as GraphNode & { x: number; y: number };
+            const n = node as unknown as XY;
             ctx.fillStyle = color;
             ctx.beginPath();
             ctx.arc(n.x, n.y, nodeRadius(n) + 6, 0, 2 * Math.PI);
@@ -373,58 +675,44 @@ export default function GraphView({
           }}
           linkColor={engine.graphProps.linkColor}
           linkWidth={engine.graphProps.linkWidth}
+          linkDirectionalParticleWidth={engine.graphProps.linkDirectionalParticleWidth}
+          linkDirectionalParticleColor={engine.graphProps.linkDirectionalParticleColor}
+          linkDirectionalParticleSpeed={engine.graphProps.linkDirectionalParticleSpeed}
           onNodeClick={(node) => {
             const n = node as unknown as GraphNode;
             setSelected((cur) => (cur?.id === n.id ? null : n));
           }}
           onBackgroundClick={() => setSelected(null)}
-          nodeCanvasObject={(node, ctx, globalScale) => {
-            const n = node as unknown as GraphNode & { x: number; y: number };
-            // the canvas repaints at 60fps, so reading heat through refs makes
-            // the 2D view exactly as live as the 3D one
-            const h = engine.heatRef.current.get(n.id) ?? 0;
-            const color = h > 0.05 ? heatColor(nodeColor(n), h) : nodeColor(n);
-            const r = nodeRadius(n) + h * 4;
-            const dimmed = neighborIds ? !neighborIds.has(n.id) : false;
-            ctx.save();
-            if (dimmed) ctx.globalAlpha = 0.15;
-            else if (h <= 0.05) {
-              if (liveHeatRef.current) ctx.globalAlpha = 0.35;
-              else if (Date.now() - lastEventAtRef.current < 6000)
-                ctx.globalAlpha = 0.42 + 0.12 * Math.sin(Date.now() / 250);
-            }
-            ctx.shadowColor = color;
-            ctx.shadowBlur = 12;
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.arc(n.x, n.y, r, 0, 2 * Math.PI);
-            ctx.fill();
-            if (selected?.id === n.id) {
-              ctx.shadowBlur = 0;
-              ctx.strokeStyle = "#f5b942";
-              ctx.lineWidth = 1.5 / globalScale;
-              ctx.beginPath();
-              ctx.arc(n.x, n.y, r + 3, 0, 2 * Math.PI);
-              ctx.stroke();
-            }
-            if (globalScale > 0.8 || (!dimmed && neighborIds) || h > 0.5) {
-              ctx.shadowBlur = 0;
-              ctx.font = `${11 / globalScale}px sans-serif`;
-              ctx.textAlign = "center";
-              ctx.textBaseline = "top";
-              ctx.fillStyle = "#e8dcc8cc";
-              ctx.fillText(n.label, n.x, n.y + r + 2);
-            }
-            ctx.restore();
-          }}
+          onRenderFramePre={renderPre}
+          nodeCanvasObject={paintNode}
+          onRenderFramePost={renderPost}
         />
       )}
       <SpotCard spot={engine.spot} />
       {selected && (
         <div className="absolute right-3 top-3 z-10 max-h-[calc(100%-1.5rem)] w-80 max-w-[85%] overflow-y-auto rounded-lg border border-card-border bg-card/95 backdrop-blur-sm">
           <div className="sticky top-0 z-10 flex items-start justify-between gap-2 rounded-t-lg bg-card/95 p-4 pb-2 backdrop-blur-sm">
-            <div className="text-sm font-medium text-glow">
-              {typeof wiki === "object" && wiki ? wiki.title : selected.label}
+            <div>
+              <div className="text-sm font-medium text-glow">
+                {typeof wiki === "object" && wiki ? wiki.title : selected.label}
+              </div>
+              {selectedCluster && (
+                <button
+                  onClick={() => {
+                    setSelected(null);
+                    setClusterFilter(selectedCluster.id);
+                  }}
+                  className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-card-border px-2 py-0.5 text-[11px] text-muted hover:text-foreground"
+                  title="Show this cluster"
+                >
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ background: clusterColor(selectedCluster.id) }}
+                  />
+                  {selectedCluster.label}
+                  <span className="opacity-60">· {selectedCluster.size}</span>
+                </button>
+              )}
             </div>
             <button
               onClick={() => setSelected(null)}
@@ -453,4 +741,12 @@ export default function GraphView({
       )}
     </div>
   );
+}
+
+// "#rrggbb" or "rgb(a)(r,g,b[,a])" → [r,g,b]
+function rgbOf(c: string): number[] {
+  if (c.startsWith("#"))
+    return [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+  const m = c.match(/\d+/g);
+  return m ? m.slice(0, 3).map(Number) : [232, 220, 200];
 }

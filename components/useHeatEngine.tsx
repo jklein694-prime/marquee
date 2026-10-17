@@ -100,6 +100,8 @@ interface HeatOpts {
   coldNode?: (n: GraphNode) => string;
   coldLink?: (l: LinkObject) => string;
   coldLinkWidth?: (l: LinkObject) => number;
+  // width of a hot edge by heat (0..1) × pulse; 3D views want slim tubes
+  hotLinkWidth?: (heatPulse: number) => number;
 }
 
 export function useHeatEngine(
@@ -237,10 +239,20 @@ export function useHeatEngine(
           }
         }
         if (best && best.id !== glideTargetRef.current && fg) {
-          lastGlideRef.current = now;
+          // a neighbor a few units away isn't worth a camera move — adopting
+          // it as the target without flying kills the every-2.8s twitch
+          const cur = withCoords(glideTargetRef.current);
           glideTargetRef.current = best.id;
+          if (cur && Math.hypot(cur.x! - best.x!, cur.y! - best.y!, cur.z! - best.z!) < 45) {
+            setHeatVersion((v) => v + 1);
+            return;
+          }
+          lastGlideRef.current = now;
+          // hubs get a wider shot than leaves so their web stays in frame
+          const degree = mapsRef.current.adj.get(best.id)?.length ?? 0;
+          const dist = Math.min(260, 130 + 14 * Math.sqrt(degree));
           const r = Math.hypot(best.x!, best.y!, best.z!) || 1;
-          const k = 1 + 220 / r;
+          const k = 1 + dist / r;
           fg.cameraPosition(
             { x: best.x! * k, y: best.y! * k, z: best.z! * k },
             { x: best.x!, y: best.y!, z: best.z! },
@@ -287,8 +299,11 @@ export function useHeatEngine(
         34 + (GLOW[1] - 34) * h
       )},${Math.round(26 + (GLOW[2] - 26) * h)})`;
     },
-    linkWidth: (l: LinkObject) =>
-      linkHeat(l) > 0.15 ? 1 + 2 * linkHeat(l) * pulse : optsRef.current.coldLinkWidth?.(l) ?? 1,
+    linkWidth: (l: LinkObject) => {
+      const h = linkHeat(l);
+      if (h <= 0.15) return optsRef.current.coldLinkWidth?.(l) ?? 1;
+      return optsRef.current.hotLinkWidth?.(h * pulse) ?? 1 + 2 * h * pulse;
+    },
     linkDirectionalParticleWidth: 1.8,
     linkDirectionalParticleColor: () => "#f5b942",
     linkDirectionalParticleSpeed: 0.02,

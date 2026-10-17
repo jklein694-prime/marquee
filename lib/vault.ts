@@ -3,6 +3,7 @@ import { createHash } from "crypto";
 import path from "path";
 import matter from "gray-matter";
 import { WIKILINK, wikilinks } from "./wikilink";
+import { assignClusters, type GraphCluster } from "./clusters";
 
 // Vault location is configurable: set VAULT_PATH in .env.local (install.sh does this).
 // Falls back to a ./vault folder in the project so the app still boots with an empty graph.
@@ -27,10 +28,17 @@ export interface GraphNode {
   verdict?: string;
   rating?: number;
   text?: string; // taste nodes are synthesized from a bullet; this IS their content
+  cluster?: number; // community id from lib/clusters (−1 = isolated); ghosts inherit their anchor's
 }
 export interface GraphLink {
   source: string;
   target: string;
+}
+export type { GraphCluster } from "./clusters";
+export interface GraphData {
+  nodes: GraphNode[];
+  links: GraphLink[];
+  clusters: GraphCluster[];
 }
 
 export { WIKILINK, wikilinks };
@@ -132,16 +140,16 @@ export function vaultSignature(): string {
   return createHash("sha1").update(parts.join("\n")).digest("base64url");
 }
 
-let graphMemo: { sig: string; graph: { nodes: GraphNode[]; links: GraphLink[] } } | null = null;
+let graphMemo: { sig: string; graph: GraphData } | null = null;
 
 /** buildGraph, rebuilt only when vault files actually changed. */
-export function cachedGraph(): { sig: string; graph: { nodes: GraphNode[]; links: GraphLink[] } } {
+export function cachedGraph(): { sig: string; graph: GraphData } {
   const sig = vaultSignature();
   if (graphMemo?.sig !== sig) graphMemo = { sig, graph: buildGraph() };
   return graphMemo;
 }
 
-export function buildGraph(): { nodes: GraphNode[]; links: GraphLink[] } {
+export function buildGraph(): GraphData {
   const nodes = new Map<string, GraphNode>();
   const linkKeys = new Set<string>();
   const links: GraphLink[] = [];
@@ -283,7 +291,11 @@ export function buildGraph(): { nodes: GraphNode[]; links: GraphLink[] } {
     }
   }
 
-  return mergeBareDuplicates([...nodes.values()], links);
+  const merged = mergeBareDuplicates([...nodes.values()], links);
+  // communities last, over the deduped graph, so a title's two spellings
+  // can't land in different clusters
+  const clustered = assignClusters(merged.nodes, merged.links);
+  return { nodes: clustered.nodes, links: merged.links, clusters: clustered.clusters };
 }
 
 /**
