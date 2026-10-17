@@ -1,4 +1,5 @@
 import fs from "fs";
+import { createHash } from "crypto";
 import path from "path";
 import matter from "gray-matter";
 import { WIKILINK, wikilinks } from "./wikilink";
@@ -104,6 +105,40 @@ export function readWikiPage(
   if (!page) return null;
   const { content } = matter(fs.readFileSync(page.file, "utf8"));
   return { title: page.title, content: content.replace(WIKILINK, "$1") };
+}
+
+/**
+ * Cheap fingerprint of everything buildGraph reads: every page's path, size and
+ * mtime plus the hub and the personal watchlist. A stat per file is ~10x
+ * cheaper than re-reading and re-parsing the vault, which on the Nano is the
+ * difference between a few ms and the better part of a second per graph load.
+ */
+export function vaultSignature(): string {
+  const parts: string[] = [];
+  const add = (file: string) => {
+    try {
+      const st = fs.statSync(file);
+      parts.push(`${file}:${st.size}:${st.mtimeMs}`);
+    } catch {
+      parts.push(`${file}:-`);
+    }
+  };
+  for (const dir of [MOVIES_DIR, ...CATEGORY_DIRS, TASTE_DIR]) {
+    add(dir); // a directory's mtime moves when a page is added or removed
+    for (const f of mdFiles(dir)) add(f);
+  }
+  add(HUB);
+  add(path.join(process.cwd(), "data/watchlist.json"));
+  return createHash("sha1").update(parts.join("\n")).digest("base64url");
+}
+
+let graphMemo: { sig: string; graph: { nodes: GraphNode[]; links: GraphLink[] } } | null = null;
+
+/** buildGraph, rebuilt only when vault files actually changed. */
+export function cachedGraph(): { sig: string; graph: { nodes: GraphNode[]; links: GraphLink[] } } {
+  const sig = vaultSignature();
+  if (graphMemo?.sig !== sig) graphMemo = { sig, graph: buildGraph() };
+  return graphMemo;
 }
 
 export function buildGraph(): { nodes: GraphNode[]; links: GraphLink[] } {

@@ -122,7 +122,7 @@ describe("runApiChatTurn", () => {
     setApiClient(client);
     const t = collect();
     await runApiChatTurn({ message: "recs", signal: signal() }, t.emit);
-    const card = t.events.find((e) => e.type === "widget") as { data: { movies: { title: string }[] } };
+    const card = t.events.find((e) => e.type === "widget") as unknown as { data: { movies: { title: string }[] } };
     expect(card.data.movies.map((m) => m.title)).toEqual(["Thief"]);
     const result = (lastUser(calls[1].params.messages).content as { content: string }[])[0].content;
     expect(result).toMatch(/Dropped .*Heat \(1995\)/);
