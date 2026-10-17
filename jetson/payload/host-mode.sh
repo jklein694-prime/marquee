@@ -64,16 +64,19 @@ if ! tailscale status >/dev/null 2>&1; then
   echo "== HTTPS: tailscale is not logged in / running — skipping (run: sudo tailscale up)"
   exit 0
 fi
+# newer CLIs can block, waiting for Serve to be enabled in the admin console —
+# never let that stall the update: each attempt gets 20s
+ts() { if command -v timeout >/dev/null 2>&1; then timeout 20 tailscale "$@"; else tailscale "$@"; fi; }
 TS_NAME="$(tailscale status --json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))' 2>/dev/null || true)"
-if tailscale serve status 2>/dev/null | grep -q "127.0.0.1:$APP_PORT\|localhost:$APP_PORT"; then
+if ts serve status 2>/dev/null </dev/null | grep -q "127.0.0.1:$APP_PORT\|localhost:$APP_PORT"; then
   echo "== HTTPS already on: https://${TS_NAME:-<nano>.<tailnet>.ts.net}"
   exit 0
 fi
 echo "== HTTPS: publishing the app on your tailnet with tailscale serve"
 # the CLI syntax changed across Tailscale versions — try new, then old
-if tailscale serve --bg --https=443 "http://127.0.0.1:$APP_PORT" >/dev/null 2>&1 \
-   || tailscale serve --bg "$APP_PORT" >/dev/null 2>&1 \
-   || tailscale serve https / "http://127.0.0.1:$APP_PORT" >/dev/null 2>&1; then
+if ts serve --bg --https=443 "http://127.0.0.1:$APP_PORT" </dev/null >/dev/null 2>&1 \
+   || ts serve --bg "$APP_PORT" </dev/null >/dev/null 2>&1 \
+   || ts serve https / "http://127.0.0.1:$APP_PORT" </dev/null >/dev/null 2>&1; then
   echo "   open on your iPhone: https://${TS_NAME:-<nano>.<tailnet>.ts.net}"
   echo "   then Share -> Add to Home Screen"
 else

@@ -28,6 +28,14 @@ IMAGE=node:20-bookworm-slim
 if [ -z "${APP_MEMORY:-}" ]; then
   if [ -e /etc/systemd/system/llama-server.service ]; then APP_MEMORY=700m; else APP_MEMORY=2g; fi
 fi
+# Node's heap: ~75% of the container limit, so V8 gives memory back before
+# docker's OOM killer has to
+case "$APP_MEMORY" in
+  *[gG]) MEM_MB=$(( ${APP_MEMORY%[gG]} * 1024 )) ;;
+  *[mM]) MEM_MB=${APP_MEMORY%[mM]} ;;
+  *) MEM_MB=2048 ;;
+esac
+HEAP_MB=$(( MEM_MB * 3 / 4 ))
 
 [ "$(id -u)" = 0 ] || { echo "run as root: sudo bash install-app.sh <repo-url>" >&2; exit 1; }
 [ -n "$REPO_URL" ] || [ -d "$APP_DIR" ] || {
@@ -104,7 +112,7 @@ Requires=docker.service
 ExecStartPre=-/usr/bin/docker rm -f wikigardener-app
 ExecStart=/usr/bin/docker run --name wikigardener-app --rm \\
   -p 3000:3000 -m $APP_MEMORY \\
-  -e NODE_OPTIONS=--max-old-space-size=$( [ "$APP_MEMORY" = 700m ] && echo 512 || echo 1536 ) \\
+  -e NODE_OPTIONS=--max-old-space-size=$HEAP_MB \\
   -v $APP_DIR:/app -w /app \\
   -v $VAULT:/vault \\
   -e VAULT_PATH=/vault \\

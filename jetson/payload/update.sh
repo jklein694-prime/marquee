@@ -168,7 +168,8 @@ else
   fi
   git -C "$APP_DIR" fetch --depth 1 origin \
     "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
-  git -C "$APP_DIR" checkout -q -B "$BRANCH" "origin/$BRANCH"
+  # -f: a build may have rewritten a tracked file (tsconfig.json, next-env.d.ts)
+  git -C "$APP_DIR" checkout -q -f -B "$BRANCH" "origin/$BRANCH"
   git -C "$APP_DIR" reset -q --hard "origin/$BRANCH"
   git -C "$APP_DIR" branch -q -u "origin/$BRANCH"
 fi

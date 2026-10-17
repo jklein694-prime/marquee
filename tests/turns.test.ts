@@ -95,6 +95,27 @@ describe("background turns", () => {
     expect(String(got.events[1].delta)).toContain("server restarted");
   });
 
+  it("ends with done even when the client saw more than the crashed log kept", async () => {
+    const id = "44444444-4444-4444-4444-444444444444";
+    fs.writeFileSync(path.join(process.cwd(), "data/turns", `${id}.jsonl`), JSON.stringify({ type: "text", delta: "a" }) + "\n");
+    const got = await sse(id, 9); // the client had 9 events; disk kept 1
+    expect(got.map((x) => x.ev.type)).toEqual(["done"]);
+    expect(got[0].id).toBe(9);
+  });
+
+  it("a turn stopped while queued never reaches the engine", async () => {
+    process.env.MOCK_STEP_MS = "40";
+    const sid = "55555555-5555-5555-5555-555555555555";
+    startChatTurn({ message: "busy", sessionId: sid });
+    const queued = startChatTurn({ message: "never sent", sessionId: sid });
+    stopTurn(queued.id);
+    await settleAll();
+    const evs = readTurn(queued.id)!.events;
+    expect(text(evs)).not.toContain("Mock reply");
+    expect(text(evs)).toContain("_(stopped)_");
+    process.env.MOCK_STEP_MS = "20";
+  });
+
   it("rejects bad ids and reports detach/finish to hooks", async () => {
     expect(readTurn("../../etc/passwd")).toBeNull();
     const finished: boolean[] = [];

@@ -171,3 +171,43 @@ describe("runApiPredictTurn", () => {
     expect(names).not.toContain("Edit");
   });
 });
+
+describe("subagent slots", () => {
+  it("never runs more than two subagents, and a stopped waiter leaves at once", async () => {
+    let live = 0;
+    let peak = 0;
+    const { client } = fakeClient((req) => {
+      const sys = (req.params.system as { text: string }[])[0].text;
+      if (sys.startsWith("You research")) {
+        live++;
+        peak = Math.max(peak, live);
+        return { content: [text("r")] };
+      }
+      const msgs = req.params.messages as BetaMessageParam[];
+      if (msgs.length === 1)
+        return {
+          content: [1, 2, 3, 4].map((i) =>
+            tool(`k${i}`, "Task", { subagent_type: "movie-researcher", description: "d", prompt: `p${i}` })
+          ),
+        };
+      return { content: [text("done")] };
+    });
+    // slow the subagent replies down so they overlap
+    const orig = client.beta.messages.stream.bind(client.beta.messages);
+    (client.beta.messages as unknown as { stream: unknown }).stream = (p: { system: { text: string }[] }) => {
+      const s = orig(p as never) as unknown as { finalMessage: () => Promise<unknown> };
+      if (p.system[0].text.startsWith("You research")) {
+        const f = s.finalMessage;
+        s.finalMessage = async () => {
+          await new Promise((r) => setTimeout(r, 30));
+          live--;
+          return f();
+        };
+      }
+      return s as never;
+    };
+    setApiClient(client);
+    await runApiChatTurn({ message: "go", signal: signal() }, () => {});
+    expect(peak).toBeLessThanOrEqual(2);
+  });
+});

@@ -225,16 +225,30 @@ export default function ChatPane({
   // backgrounded home-screen app — by replaying each saved turn from the
   // server; a turn that is still running is picked up live
   const restoredRef = useRef(false);
+  // true while saved turns are replayed: new sends queue until it's over
+  const restoringRef = useRef(false);
   useEffect(() => {
     if (restoredRef.current) return;
     restoredRef.current = true;
     const saved = loadChat();
     if (!saved.turns.length) return;
     sessionRef.current = saved.sessionId;
+    restoringRef.current = true;
     void (async () => {
-      for (let i = 0; i < saved.turns.length; i++) {
-        const t = saved.turns[i];
-        await run(t.text, undefined, false, undefined, { turnId: t.id, replay: i < saved.turns.length - 1 });
+      try {
+        for (let i = 0; i < saved.turns.length; i++) {
+          const t = saved.turns[i];
+          await run(t.text, undefined, false, undefined, { turnId: t.id, replay: i < saved.turns.length - 1 });
+        }
+      } finally {
+        restoringRef.current = false;
+        // anything typed during the restore goes out now, in order
+        const next = queueRef.current.shift();
+        if (next) void run(next.text, next.onDone);
+        else {
+          busyRef.current = false;
+          setBusy(false);
+        }
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -262,7 +276,7 @@ export default function ChatPane({
       void run(text, onDone, true, opts.tag);
       return "sent";
     }
-    if (busyRef.current) {
+    if (busyRef.current || restoringRef.current) {
       queueRef.current.push({ text, onDone });
       return "queued";
     }
@@ -409,6 +423,8 @@ export default function ChatPane({
         currentTurnRef.current = null;
         // drop empty assistant bubbles (e.g. turn ended on a widget)
         setMessages((m) => m.filter((msg) => !(msg.role === "assistant" && !msg.text.trim())));
+        // mid-restore the restore loop owns the queue and the busy flag
+        if (existing && restoringRef.current) return;
         const next = queueRef.current.shift();
         if (next) {
           void run(next.text, next.onDone); // drain — busy stays up across the queue

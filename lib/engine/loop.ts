@@ -130,6 +130,8 @@ export function setApiClient(c: Anthropic | null) {
 // process instead of failing every turn.
 const BETAS = ["server-side-fallback-2026-07-01", "thinking-display-updates-2026-08-18"];
 let plainMode = false;
+// a 400 that rejects the extras themselves — not any 400 that mentions thinking
+const BETA_REJECTED = /server-side-fallback|thinking-display-updates|anthropic-beta|\bfallbacks?\b|thinking\.display|display.*updates/i;
 export function resetPlainMode() {
   plainMode = false;
 }
@@ -218,7 +220,7 @@ export async function runLoop(o: LoopOpts): Promise<LoopResult> {
     } catch (err) {
       if (o.signal.aborted || err instanceof Anthropic.APIUserAbortError)
         return { end: "aborted", finalText, usage, lastInputTokens };
-      if (!plainMode && err instanceof Anthropic.BadRequestError && /beta|fallback|display|thinking/i.test(err.message)) {
+      if (!plainMode && err instanceof Anthropic.BadRequestError && BETA_REJECTED.test(err.message)) {
         plainMode = true; // retry this step without the beta extras
         step--;
         continue;

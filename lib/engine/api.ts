@@ -81,17 +81,35 @@ const SUBAGENT_SPECS: Record<
   "page-writer": { tools: [newPageWriteTool], effort: "low", maxTokens: 32000 },
 };
 
-// at most 2 subagents at a time (the prompt's cost rule, enforced)
+// at most 2 subagents at a time (the prompt's cost rule, enforced). A freed
+// slot is handed straight to the next waiter, so a newcomer can't sneak in;
+// a waiter whose turn is stopped leaves the queue at once.
 let running = 0;
 const waiting: (() => void)[] = [];
-async function slot<T>(fn: () => Promise<T>): Promise<T> {
-  if (running >= 2) await new Promise<void>((r) => waiting.push(r));
-  running++;
+export class StoppedError extends Error {}
+async function slot<T>(fn: () => Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) throw new StoppedError("stopped");
+  if (running >= 2) {
+    await new Promise<void>((resolve, reject) => {
+      const wake = () => {
+        signal.removeEventListener("abort", onAbort);
+        resolve();
+      };
+      const onAbort = () => {
+        const i = waiting.indexOf(wake);
+        if (i >= 0) waiting.splice(i, 1);
+        reject(new StoppedError("stopped"));
+      };
+      waiting.push(wake);
+      signal.addEventListener("abort", onAbort, { once: true });
+    });
+  } else running++;
   try {
     return await fn();
   } finally {
-    running--;
-    waiting.shift()?.();
+    const next = waiting.shift();
+    if (next) next(); // the slot passes on; running stays the same
+    else running--;
   }
 }
 
@@ -124,6 +142,9 @@ function taskTool(emit: Emit, signal: AbortSignal, usage: UsageTotals): ToolDef 
         });
         if (res.end === "aborted") return "(stopped)";
         return res.finalText || `(subagent ended: ${res.end})`;
+      }, signal).catch((err) => {
+        if (err instanceof StoppedError) return "(stopped)";
+        throw err;
       }),
   });
 }

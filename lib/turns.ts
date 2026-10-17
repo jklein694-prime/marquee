@@ -125,6 +125,8 @@ export function startChatTurn(opts: { message: string; sessionId?: string; silen
     .then(async () => {
       let sessionId = opts.sessionId;
       try {
+        // stopped while still queued behind another turn: never reaches the model
+        if (turn.abort.signal.aborted) throw new Error("stopped");
         const res = await chatEngine()(
           { message: decorate(opts.message), sessionId, signal: turn.abort.signal },
           emit

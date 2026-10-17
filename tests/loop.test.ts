@@ -68,7 +68,8 @@ describe("runLoop", () => {
   });
 
   it("drops the beta extras for good after a 400 about them", async () => {
-    const err = new Anthropic.BadRequestError(400, { error: { message: "unsupported beta" } }, "unsupported beta header", new Headers());
+    const msg = "Unexpected value(s) `server-side-fallback-2026-07-01` for the `anthropic-beta` header";
+    const err = new Anthropic.BadRequestError(400, { error: { message: msg } }, msg, new Headers());
     const { client, calls } = fakeClient([{ content: [], error: err }, { content: [text("plain")] }, { content: [text("again")] }]);
     setApiClient(client);
     const res = await runLoop({ ...base(), tools: [], messages: [{ role: "user", content: "x" }] });
@@ -77,6 +78,16 @@ describe("runLoop", () => {
     expect(calls[1].params.thinking).toEqual({ type: "adaptive" });
     await runLoop({ ...base(), tools: [], messages: [{ role: "user", content: "y" }] });
     expect(calls[2].params.betas).toBeUndefined();
+  });
+
+  it("an unrelated 400 that mentions thinking does not switch the extras off", async () => {
+    const msg = "messages.1.content.0: thinking blocks cannot be modified";
+    const err = new Anthropic.BadRequestError(400, { error: { message: msg } }, msg, new Headers());
+    const { client, calls } = fakeClient([{ content: [], error: err }, { content: [text("next")] }]);
+    setApiClient(client);
+    await expect(runLoop({ ...base(), tools: [], messages: [{ role: "user", content: "x" }] })).rejects.toThrow(/thinking blocks/);
+    await runLoop({ ...base(), tools: [], messages: [{ role: "user", content: "y" }] });
+    expect(calls[1].params.betas).toBeDefined();
   });
 
   it("ends the turn after a blocking widget without another model call", async () => {

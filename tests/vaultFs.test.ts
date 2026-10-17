@@ -25,9 +25,16 @@ describe("vault confinement", () => {
     expect(() => vaultRel("/etc/passwd")).toThrow(ToolError);
     expect(() => vaultRel(".git/config")).toThrow(ToolError);
   });
-  it("rejects a symlink that points out of the vault", () => {
+  it("rejects a symlink that points out of the vault", async () => {
     fs.symlinkSync("/etc", path.join(vault(), "wiki/movies/escape"));
     expect(() => readFile("wiki/movies/escape/hostname")).toThrow(/outside the vault/);
+    // writing to a not-yet-existing path under the symlink is refused too
+    await expect(writeFile("wiki/movies/escape/new/Thing.md", "x")).rejects.toThrow(/outside the vault/);
+    // and grep never reads through it
+    const secret = fs.mkdtempSync(path.join(require("os").tmpdir(), "outside-"));
+    fs.writeFileSync(path.join(secret, "s.md"), "TOPSECRET\n");
+    fs.symlinkSync(path.join(secret, "s.md"), path.join(vault(), "wiki/movies/leak.md"));
+    expect(grep({ pattern: "TOPSECRET" })).toBe("No matches found");
   });
 });
 

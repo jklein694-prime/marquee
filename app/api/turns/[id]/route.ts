@@ -13,7 +13,11 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   if (!found) return NextResponse.json({ error: "unknown turn" }, { status: 404 });
   const enc = new TextEncoder();
 
+  let closeStream = () => {};
   const stream = new ReadableStream({
+    cancel() {
+      closeStream();
+    },
     start(controller) {
       let closed = false;
       const send = (chunk: string) => {
@@ -21,17 +25,18 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
         try {
           controller.enqueue(enc.encode(chunk));
         } catch {
-          closed = true;
+          close();
         }
       };
-      const close = () => {
+      function close() {
         if (closed) return;
         closed = true;
         cleanup();
         try {
           controller.close();
         } catch {}
-      };
+      }
+      closeStream = close;
       const event = (ev: object, seq: number) => send(`id: ${seq}\ndata: ${JSON.stringify(ev)}\n\n`);
 
       // replay what the client missed, then go live
@@ -41,16 +46,24 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
       let next = after + backlog.length;
 
       let unsubscribe = () => {};
+      // eslint-disable-next-line prefer-const
+      let beat: ReturnType<typeof setInterval> | undefined;
       // heartbeat: keeps proxies (Tailscale serve) from idling the stream out,
       // and lets the client's stall watchdog tell "quiet" from "dead"
-      const beat = setInterval(() => send(`: hb\n\n`), 15000);
-      const cleanup = () => {
-        clearInterval(beat);
+      function cleanup() {
+        if (beat) clearInterval(beat);
         unsubscribe();
-      };
+      }
+      beat = setInterval(() => send(`: hb\n\n`), 15000);
       req.signal.addEventListener("abort", close);
 
-      if (!live) return close();
+      if (!live) {
+        // a finished turn whose tail the client already has — or, after a
+        // crash, a disk log shorter than what the client saw: always end
+        // with "done" so the client never waits on a turn that is over
+        if (!backlog.some((ev) => ev.type === "done")) event({ type: "done" }, Math.max(after, events.length));
+        return close();
+      }
       // events emitted between the slice above and subscribing are caught up
       // here; listeners then deliver everything in order
       const listener = (ev: { type: string }, seq: number) => {

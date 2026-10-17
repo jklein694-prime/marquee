@@ -40,15 +40,18 @@ export function vaultRel(p: string): string {
 
 function absOf(rel: string): string {
   const abs = path.join(root(), rel);
-  // a symlink inside the vault pointing out of it is still outside
+  // a symlink inside the vault pointing out of it is still outside: resolve
+  // the nearest part of the path that exists, then re-append the rest
+  let existing = abs;
+  const rest: string[] = [];
+  while (!fs.existsSync(existing) && path.dirname(existing) !== existing) {
+    rest.unshift(path.basename(existing));
+    existing = path.dirname(existing);
+  }
   let real = abs;
   try {
-    real = fs.realpathSync(abs);
-  } catch {
-    try {
-      real = path.join(fs.realpathSync(path.dirname(abs)), path.basename(abs));
-    } catch {}
-  }
+    real = path.join(fs.realpathSync(existing), ...rest);
+  } catch {}
   const r = path.relative(fs.realpathSync(root()), real);
   if (r.startsWith("..") || path.isAbsolute(r)) throw new ToolError(`path resolves outside the vault: ${rel}`);
   return abs;
@@ -199,7 +202,7 @@ export function grep(opts: {
     if (!/\.(md|json|txt|canvas|base|ya?ml)$/i.test(f)) continue;
     let text: string;
     try {
-      text = fs.readFileSync(path.join(root(), f), "utf8");
+      text = fs.readFileSync(absOf(f), "utf8"); // skips files symlinked out of the vault
     } catch {
       continue;
     }
