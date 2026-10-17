@@ -119,7 +119,11 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
-systemctl enable --now wikigardener-app.service
+# enable --now is a no-op when the unit is already active, which left the OLD
+# container serving a rebuilt .next (its manifest pointed at deleted CSS/JS
+# chunks: an unstyled page). Always restart so the new build is what's served.
+systemctl enable wikigardener-app.service
+systemctl restart wikigardener-app.service
 
 IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 cat <<EOF
