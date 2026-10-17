@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 import type { BetaMessageParam, BetaToolUseBlock } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { SESSIONS_DIR as DIR } from "../paths";
+import { writeTextAtomic } from "../atomicWrite";
 const ID = /^[0-9a-f-]{36}$/;
 
 export interface SessionFile {
@@ -23,11 +24,7 @@ export function loadSession(id: string | undefined): SessionFile | null {
 }
 
 export function saveSession(id: string, s: SessionFile) {
-  fs.mkdirSync(DIR, { recursive: true });
-  const file = path.join(DIR, `${id}.json`);
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify({ ...s, updatedAt: new Date().toISOString() }));
-  fs.renameSync(tmp, file);
+  writeTextAtomic(path.join(DIR, `${id}.json`), JSON.stringify({ ...s, updatedAt: new Date().toISOString() }));
 }
 
 /**

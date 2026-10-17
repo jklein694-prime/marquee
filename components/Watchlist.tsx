@@ -311,16 +311,22 @@ function Watchlist({
   // no streaming data always show, and nothing is ever removed from the data
   const visible = (i: WatchItem) => !i.streaming?.length || i.streaming.some((s) => !excluded.has(canonicalService(s)));
 
-  const refetch = useCallback(() => {
-    fetch("/api/watchlist")
-      .then((r) => r.json())
-      .then((d) => {
-        setUser(d.user ?? []);
-        setSuggestions(d.suggestions ?? []);
-        setNotInterested(d.notInterested ?? []);
-        setLoaded(true);
-      })
-      .catch(() => {});
+  // the server answers from disk and memo immediately and refreshes TMDB
+  // details in the background; `pending` says how many items it is still
+  // filling in, so re-read a couple of times until it reports none
+  const refetch = useCallback((retries = 2) => {
+    const load = (left: number) =>
+      fetch("/api/watchlist")
+        .then((r) => r.json())
+        .then((d) => {
+          setUser(d.user ?? []);
+          setSuggestions(d.suggestions ?? []);
+          setNotInterested(d.notInterested ?? []);
+          setLoaded(true);
+          if (d.pending > 0 && left > 0) setTimeout(() => load(left - 1), 2500);
+        })
+        .catch(() => {});
+    load(retries);
   }, []);
 
   // the panel stays mounted across tab switches, so a turn ending while it is

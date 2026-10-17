@@ -9,6 +9,7 @@ import QuickRate from "@/components/QuickRate";
 import PredictPanel from "@/components/PredictPanel";
 import HelpPanel from "@/components/HelpPanel";
 import { Button, IconButton } from "@/components/ui";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ChatIcon, ChevronLeftIcon, CloseIcon, DotsIcon, GraphIcon, ListIcon, StarIcon } from "@/components/icons";
 import { emitThinking, traceToThinking } from "@/lib/liveThinking";
 import { pushTrace, useTrace } from "@/lib/traceStore";
@@ -184,14 +185,16 @@ export default function Home() {
               </span>
             )}
           </header>
-          <ChatPane
-            onTurnEnd={onTurnEnd}
-            onTrace={onTrace}
-            onOpenHelp={onOpenHelp}
-            onWatchGraph={onWatchGraph}
-            onInputFocusChange={setChatFocused}
-            sendRef={chatSend}
-          />
+          <ErrorBoundary name="Chat">
+            <ChatPane
+              onTurnEnd={onTurnEnd}
+              onTrace={onTrace}
+              onOpenHelp={onOpenHelp}
+              onWatchGraph={onWatchGraph}
+              onInputFocusChange={setChatFocused}
+              sendRef={chatSend}
+            />
+          </ErrorBoundary>
         </section>
         {/* stays mounted even when closed so Screen Test's panel — and any
             screening it is running — survives tab switches and Close */}
@@ -233,32 +236,44 @@ export default function Home() {
           <div className="min-h-0 flex-1">
             {visited.has("graph") && (
               <div className={panel === "graph" ? "h-full" : "hidden"}>
-                <GraphView version={graphVersion} mode={graphMode} onModeChange={setGraphMode} active={panel === "graph"} />
+                <ErrorBoundary name="Taste Graph">
+                  <GraphView version={graphVersion} mode={graphMode} onModeChange={setGraphMode} active={panel === "graph"} />
+                </ErrorBoundary>
               </div>
             )}
             {visited.has("watchlist") && (
               <div className={panel === "watchlist" ? "h-full" : "hidden"}>
-                <Watchlist version={graphVersion} onChat={chat} active={panel === "watchlist"} />
+                <ErrorBoundary name="Watchlist">
+                  <Watchlist version={graphVersion} onChat={chat} active={panel === "watchlist"} />
+                </ErrorBoundary>
               </div>
             )}
             {visited.has("rate") && (
               <div className={panel === "rate" ? "h-full" : "hidden"}>
-                <QuickRate onChat={chat} />
+                <ErrorBoundary name="Quick Rate">
+                  <QuickRate onChat={chat} />
+                </ErrorBoundary>
               </div>
             )}
             {visited.has("predict") && (
               <div className={panel === "predict" ? "h-full" : "hidden"}>
-                <PredictPanel version={graphVersion} active={panel === "predict"} />
+                <ErrorBoundary name="Screen Test">
+                  <PredictPanel version={graphVersion} active={panel === "predict"} />
+                </ErrorBoundary>
               </div>
             )}
             {visited.has("help") && (
               <div className={panel === "help" ? "h-full" : "hidden"}>
-                <HelpPanel />
+                <ErrorBoundary name="Help">
+                  <HelpPanel />
+                </ErrorBoundary>
               </div>
             )}
             {visited.has("booth") && (
               <div className={panel === "booth" ? "h-full" : "hidden"}>
-                <Booth />
+                <ErrorBoundary name="Projection Booth">
+                  <Booth />
+                </ErrorBoundary>
               </div>
             )}
             {panel === "more" && <MorePanel onPick={open} />}
