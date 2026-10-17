@@ -61,3 +61,7 @@ data/watchlist.json
 wikigardener-payload/
 __pycache__/
 *.pyc
+data/turns/
+data/sessions/
+data/push.json
+data/vapid.json

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import PwaRegister from "@/components/PwaRegister";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,6 +16,8 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Marquee",
   description: "Personal movie & TV expert with a living taste graph",
+  // iOS home-screen app: full screen, solid dark status bar (content stays below the notch)
+  appleWebApp: { capable: true, title: "Marquee", statusBarStyle: "black" },
 };
 
 // viewport-fit: cover surfaces the notch/home-indicator safe-area insets so the
@@ -39,6 +42,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         {children}
+        <PwaRegister />
         <div className="vignette" />
       </body>
     </html>
