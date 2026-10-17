@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { startChatTurn } from "@/lib/turns";
+import "@/lib/push"; // registers the "reply finished in the background" notifier
 
 export const dynamic = "force-dynamic";
 

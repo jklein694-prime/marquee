@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import ChatPane, { ChatSend, TraceEntry } from "@/components/ChatPane";
+import PushToggle from "@/components/PushToggle";
 import GraphView from "@/components/GraphView";
 import Watchlist from "@/components/Watchlist";
 import QuickRate from "@/components/QuickRate";
@@ -103,6 +104,7 @@ function MorePanel({ onPick }: { onPick: (p: Panel) => void }) {
           <div className="mt-1 text-xs text-muted">{desc}</div>
         </button>
       ))}
+      <PushToggle />
     </div>
   );
 }

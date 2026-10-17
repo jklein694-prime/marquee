@@ -7,6 +7,7 @@
 // below in the same change so the guide never drifts from the app.
 
 import { Markdown } from "./ChatPane";
+import PushToggle from "./PushToggle";
 
 type Section = { id: string; title: string; body: string };
 
@@ -187,6 +188,21 @@ a reply takes a while, open the Booth to confirm it's working, not frozen. Blue-
   term. Just ask "what do you mean?" any time.
 - **No emojis**, anywhere.`,
   },
+  {
+    id: "phone",
+    title: "On your phone",
+    body: `- **Install it.** Open Marquee at its HTTPS address (the Nano's Tailscale name,
+  e.g. \`https://wikigardener.<your-tailnet>.ts.net\`), then Share -> **Add to Home
+  Screen**. It opens full screen like a regular app.
+- **Leave any time.** Replies are worked out on the Nano, not in the app — switch
+  apps, lock the phone, or lose signal mid-reply and it keeps going. Come back and
+  the rest of the answer is there; even after the phone reloads the app, the
+  conversation is rebuilt from the Nano.
+- **Notifications.** Turn them on below (iPhone: only from the home-screen app) and
+  you get a notification when a reply finishes while Marquee is in the background.
+- **New chat** (top of the conversation) starts a fresh session; your taste wiki is
+  unaffected — it is the memory either way.`,
+  },
 ];
 
 export default function HelpPanel() {
@@ -228,6 +244,9 @@ export default function HelpPanel() {
             </div>
           </section>
         ))}
+        <div className="mb-6">
+          <PushToggle />
+        </div>
         <div className="mt-2 border-t border-card-border pt-3 text-xs text-muted">
           This guide is kept in sync with the app as features change.
         </div>
