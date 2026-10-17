@@ -17,7 +17,8 @@
 #      hard-reset to it (only build output and node_modules live there)
 #   4. refresh the device code from the repo's jetson/payload: gardener,
 #      audit, app installer, setup wizard, this script, the CLI
-#   5. rebuild + restart the app via app/install-app.sh, unless nothing changed
+#   5. host mode (host-mode.sh): retire the on-device AI, HTTPS via Tailscale
+#   6. rebuild + restart the app via app/install-app.sh, unless nothing changed
 #
 # Repo/branch: APP_REPO= / APP_BRANCH= in /etc/wikigardener/gardener.conf,
 # else the checkout's existing origin, else the default below.
@@ -41,7 +42,7 @@ for arg in "$@"; do
     --force) FORCE=1 ;;
     --fg) FG=1 ;;
     log|status) MODE=log ;;
-    -h|--help) sed -n '2,24p' "$SELF" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,25p' "$SELF" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown argument: $arg (try --help)" >&2; exit 2 ;;
   esac
 done
@@ -192,6 +193,7 @@ if [ -d "$PAYLOAD/gardener" ]; then
   swap_in() { install -m 755 "$1" "$2.new" && mv -f "$2.new" "$2"; }
   swap_in "$PAYLOAD/setup-wizard.sh" "$OPT/setup-wizard.sh"
   swap_in "$PAYLOAD/update.sh" "$OPT/update.sh"
+  [ -f "$PAYLOAD/host-mode.sh" ] && swap_in "$PAYLOAD/host-mode.sh" "$OPT/host-mode.sh"
   swap_in "$PAYLOAD/wikigardener" "$BIN/wikigardener"
   if systemctl is-active --quiet wikigardener-web 2>/dev/null; then
     systemctl restart wikigardener-web || true
@@ -200,7 +202,12 @@ else
   echo "   (no jetson/payload in this checkout — device code left as is)"
 fi
 
-# 4. app rebuild
+# 4. host mode: retire the on-device AI, HTTPS via Tailscale (idempotent)
+if [ -f "$OPT/host-mode.sh" ]; then
+  WG_OPT="$OPT" WG_ETC="$ETC" bash "$OPT/host-mode.sh" || echo "   (host-mode step failed — continuing)"
+fi
+
+# 5. app rebuild
 if [ "$FORCE" = 0 ] && [ "$OLD" = "$(git -C "$APP_DIR" rev-parse HEAD)" ] \
    && systemctl is-active --quiet wikigardener-app 2>/dev/null; then
   echo "== app already up to date and running — skipping rebuild (--force to rebuild)"

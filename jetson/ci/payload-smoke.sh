@@ -19,7 +19,7 @@ echo "==> checking expected paths"
 # shellcheck source=../PINS.env
 source "$JETSON/PINS.env"
 for path in \
-  install.sh preflight.sh uninstall.sh setup-wizard.sh update.sh wikigardener PINS.env \
+  install.sh preflight.sh uninstall.sh setup-wizard.sh update.sh host-mode.sh wikigardener PINS.env \
   config/gardener.conf \
   systemd/llama-server.service systemd/gardener.service systemd/gardener.timer \
   gardener/__main__.py gardener/daemon.py gardener/patch.py \
@@ -42,7 +42,7 @@ do
 done
 
 echo "==> entrypoints parse"
-bash -n "$OUT/install.sh" "$OUT/update.sh" "$OUT/preflight.sh" "$OUT/uninstall.sh" "$OUT/audit/audit.sh"
+bash -n "$OUT/install.sh" "$OUT/update.sh" "$OUT/host-mode.sh" "$OUT/preflight.sh" "$OUT/uninstall.sh" "$OUT/audit/audit.sh"
 
 echo "==> preflight refuses on non-Jetson (expected failure path)"
 if [ "$(uname -m)" != "aarch64" ]; then

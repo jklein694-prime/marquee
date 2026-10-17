@@ -9,15 +9,13 @@
 # glibc — so it runs inside a Docker container (containers bring their own
 # libc). JetPack ships Docker.
 #
-# HONEST CAVEATS (hardware-verify):
-#   - Node-20 container on JetPack 4.6's 4.9 kernel is believed-working but
-#     unverified here. If the container won't start, use the fallback below.
-#   - RAM is tight: llama-server holds ~1.5-2.6GB of the 4GB. The app service
-#     is capped at 700MB and llama-server may need the 0.5b model tier when
-#     both run. On a 2GB Nano, don't run both.
-#   - The chat panel calls the Claude API — it works during online windows
-#     (key from /etc/wikigardener/anthropic.key); graph/wiki browsing is
-#     fully offline.
+# NOTES:
+#   - The chat calls the Claude API (key from /etc/wikigardener/anthropic.key;
+#     a subscription token in claude-oauth.token works too, on the slower
+#     Agent SDK engine); graph/wiki browsing is fully offline.
+#   - Memory: with the on-device AI retired (host-mode.sh) the app gets 2GB;
+#     while llama-server is still installed it stays capped at 700MB.
+#     Override with APP_MEMORY=<docker -m value>.
 # FALLBACK: run the app on your laptop against a synced clone of the vault
 #   (git sync keeps it fresh):  VAULT_PATH=~/vault npm run dev
 set -euo pipefail
@@ -27,6 +25,9 @@ APP_DIR=/opt/wikigardener/app-src
 VAULT=/var/lib/wikigardener/vault
 KEY_FILE=/etc/wikigardener/anthropic.key
 IMAGE=node:20-bookworm-slim
+if [ -z "${APP_MEMORY:-}" ]; then
+  if [ -e /etc/systemd/system/llama-server.service ]; then APP_MEMORY=700m; else APP_MEMORY=2g; fi
+fi
 
 [ "$(id -u)" = 0 ] || { echo "run as root: sudo bash install-app.sh <repo-url>" >&2; exit 1; }
 [ -n "$REPO_URL" ] || [ -d "$APP_DIR" ] || {
@@ -102,7 +103,8 @@ Requires=docker.service
 [Service]
 ExecStartPre=-/usr/bin/docker rm -f wikigardener-app
 ExecStart=/usr/bin/docker run --name wikigardener-app --rm \\
-  -p 3000:3000 -m 700m \\
+  -p 3000:3000 -m $APP_MEMORY \\
+  -e NODE_OPTIONS=--max-old-space-size=$( [ "$APP_MEMORY" = 700m ] && echo 512 || echo 1536 ) \\
   -v $APP_DIR:/app -w /app \\
   -v $VAULT:/vault \\
   -e VAULT_PATH=/vault \\

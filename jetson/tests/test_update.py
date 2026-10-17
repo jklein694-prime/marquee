@@ -44,6 +44,7 @@ def _setup(tmp_path):
     (payload / "setup-wizard.sh").write_text("true\n")
     (payload / "wikigardener").write_text("true\n")
     shutil.copy(UPDATE, str(payload / "update.sh"))
+    shutil.copy(os.path.join(JETSON, "payload", "host-mode.sh"), str(payload / "host-mode.sh"))
     _git(tmp_path, "init", "-q", "-b", "main", str(work))
     _commit(work, "old")
     old = _git(work, "rev-parse", "HEAD")
@@ -88,7 +89,10 @@ def _setup(tmp_path):
         WG_BIN=str(tmp_path / "bin"), WG_APP_DIR=str(app),
         WG_RESOLV=str(tmp_path / "resolv.conf"),
         WG_APP_INSTALLER=str(installer),
+        WG_UNITS_DIR=str(tmp_path / "units"),
     )
+    os.makedirs(env["WG_UNITS_DIR"])
+    open(os.path.join(env["WG_UNITS_DIR"], "llama-server.service"), "w").close()
     os.makedirs(env["WG_BIN"])
     return dict(env=env, app=app, opt=opt, remote=remote, calls=calls,
                 var=tmp_path / "var", new=_git(work, "rev-parse", "HEAD"))
@@ -123,6 +127,10 @@ def test_update_repairs_checkout_and_deploys(tmp_path):
     # WiFi was off: turned on for the update, back off afterwards
     assert calls.index("nmcli radio wifi on") < calls.index("nmcli radio wifi off")
     assert (s["var"] / "update.status").read_text().startswith("0 ")
+    # host mode ran: the on-device AI is retired as part of the update
+    assert (opt / "host-mode.sh").exists()
+    assert not os.path.exists(os.path.join(s["env"]["WG_UNITS_DIR"], "llama-server.service"))
+    assert "retiring the on-device AI" in proc.stdout
 
 
 def test_update_skips_rebuild_when_current(tmp_path):
