@@ -37,6 +37,7 @@ export async function POST(req: Request) {
         } catch {}
       };
       let sid: string | undefined = sessionId;
+      let servedModel: string | undefined;
 
       // live status line for the booth: long thinking stretches and big tool
       // inputs generate zero text/trace events, so without this the app looks
@@ -94,6 +95,12 @@ export async function POST(req: Request) {
             // trace: every tool call, main agent and subagents alike
             if (m.type === "assistant") {
               if (!m.parent_tool_use_id) { thinkChars = 0; status(""); }
+              // the model the API actually served (not what the model claims
+              // to be) — reported once per turn, and again if it changes
+              if (!m.parent_tool_use_id && m.message.model && m.message.model !== servedModel) {
+                servedModel = m.message.model;
+                emit({ type: "trace", kind: "model", label: servedModel });
+              }
               for (const block of m.message.content) {
                 if (block.type === "tool_use") {
                   produced = true;

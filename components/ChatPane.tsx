@@ -64,7 +64,7 @@ export type ChatSend = (
 ) => "sent" | "queued" | false;
 
 export interface TraceEntry {
-  kind: "init" | "tool" | "error" | "result";
+  kind: "init" | "tool" | "error" | "result" | "model";
   sub?: boolean;
   label: string;
   detail?: string;
