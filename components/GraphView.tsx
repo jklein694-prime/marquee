@@ -15,6 +15,7 @@ import {
   pinNodes,
 } from "./useHeatEngine";
 import { onThinking, type ThinkingEvent } from "@/lib/liveThinking";
+import { graphPalette } from "@/lib/theme";
 
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
   ssr: false,
@@ -245,10 +246,10 @@ export default function GraphView({
     },
     coldLink: (l) =>
       (l as { ghost?: boolean }).ghost
-        ? "rgba(232,220,200,0.25)"
+        ? graphPalette().edgeGhost
         : linkActive(l as unknown as GraphLink)
-          ? "#f5b942"
-          : "#2a221a",
+          ? graphPalette().edgeActive
+          : graphPalette().edge,
     coldLinkWidth: (l) => (linkActive(l as unknown as GraphLink) ? 2 : 1),
   });
 
@@ -323,13 +324,13 @@ export default function GraphView({
   return (
     <div ref={containerRef} className="relative h-full w-full">
       {data.nodes.length > 0 && (
-        <div className="absolute left-3 top-3 z-10 flex gap-1 rounded-md border border-card-border bg-card/80 p-1 text-xs backdrop-blur-sm">
+        <div className="absolute left-3 top-3 z-10 flex gap-1 rounded-md border border-border bg-surface-1/90 p-1 text-xs backdrop-blur-sm">
           {(["2d", "3d"] as const).map((m) => (
             <button
               key={m}
               onClick={() => onModeChange(m)}
               className={`rounded px-2 py-0.5 ${
-                mode === m ? "bg-glow/15 text-glow" : "text-muted hover:text-foreground"
+                mode === m ? "bg-accent-muted text-accent" : "text-muted hover:text-fg"
               }`}
             >
               {m.toUpperCase()}
@@ -337,7 +338,7 @@ export default function GraphView({
           ))}
           {liveLabel && (
             <span className="flex items-center gap-1.5 px-2 text-muted">
-              <span className="animate-pulse text-glow">●</span> {liveLabel}
+              <span className="animate-pulse text-accent">●</span> {liveLabel}
             </span>
           )}
         </div>
@@ -352,7 +353,7 @@ export default function GraphView({
           width={size.width}
           height={size.height}
           graphData={liveData}
-          backgroundColor="#0c0a08"
+          backgroundColor={graphPalette().background}
           showNavInfo={false}
           enableNodeDrag={false}
           nodeLabel={(n) => (n as unknown as GraphNode).label}
@@ -368,7 +369,7 @@ export default function GraphView({
           width={size.width}
           height={size.height}
           graphData={liveData}
-          backgroundColor="#0c0a08"
+          backgroundColor={graphPalette().background}
           autoPauseRedraw={false}
           d3AlphaDecay={0.05}
           d3VelocityDecay={0.5}
@@ -411,7 +412,7 @@ export default function GraphView({
             ctx.fill();
             if (selected?.id === n.id) {
               ctx.shadowBlur = 0;
-              ctx.strokeStyle = "#f5b942";
+              ctx.strokeStyle = graphPalette().edgeActive;
               ctx.lineWidth = 1.5 / globalScale;
               ctx.beginPath();
               ctx.arc(n.x, n.y, r + 3, 0, 2 * Math.PI);
@@ -422,7 +423,7 @@ export default function GraphView({
               ctx.font = `${11 / globalScale}px sans-serif`;
               ctx.textAlign = "center";
               ctx.textBaseline = "top";
-              ctx.fillStyle = "#e8dcc8cc";
+              ctx.fillStyle = withAlpha(graphPalette().label, 0.8);
               ctx.fillText(n.label, n.x, n.y + r + 2);
             }
             ctx.restore();
@@ -431,14 +432,14 @@ export default function GraphView({
       )}
       <SpotCard spot={engine.spot} />
       {selected && (
-        <div className="absolute right-3 top-3 z-10 max-h-[calc(100%-1.5rem)] w-80 max-w-[85%] overflow-y-auto rounded-lg border border-card-border bg-card/95 backdrop-blur-sm">
-          <div className="sticky top-0 z-10 flex items-start justify-between gap-2 rounded-t-lg bg-card/95 p-4 pb-2 backdrop-blur-sm">
-            <div className="text-sm font-medium text-glow">
+        <div className="absolute right-3 top-3 z-10 max-h-[calc(100%-1.5rem)] w-80 max-w-[85%] overflow-y-auto rounded-lg border border-border bg-surface-1/95 backdrop-blur-sm">
+          <div className="sticky top-0 z-10 flex items-start justify-between gap-2 rounded-t-lg bg-surface-1/95 p-4 pb-2 backdrop-blur-sm">
+            <div className="text-sm font-medium text-accent">
               {typeof wikiPage === "object" && wikiPage ? wikiPage.title : selected.label}
             </div>
             <button
               onClick={() => setSelected(null)}
-              className="text-muted hover:text-foreground"
+              className="text-muted hover:text-fg"
               aria-label="Close"
             >
               ×

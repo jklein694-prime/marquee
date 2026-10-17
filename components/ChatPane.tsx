@@ -13,33 +13,33 @@ export function Markdown({ text }: { text: string }) {
       remarkPlugins={[remarkGfm]}
       components={{
         p: (p) => <p className="my-1.5 first:mt-0 last:mb-0" {...p} />,
-        strong: (p) => <strong className="font-semibold text-glow" {...p} />,
-        h1: (p) => <div className="mt-2 font-semibold text-glow" {...p} />,
-        h2: (p) => <div className="mt-2 font-semibold text-glow" {...p} />,
-        h3: (p) => <div className="mt-2 font-semibold text-glow" {...p} />,
-        h4: (p) => <div className="mt-2 font-semibold text-glow" {...p} />,
-        hr: () => <hr className="my-2 border-card-border" />,
+        strong: (p) => <strong className="font-semibold text-fg" {...p} />,
+        h1: (p) => <div className="mt-2 font-semibold text-fg" {...p} />,
+        h2: (p) => <div className="mt-2 font-semibold text-fg" {...p} />,
+        h3: (p) => <div className="mt-2 font-semibold text-fg" {...p} />,
+        h4: (p) => <div className="mt-2 font-semibold text-fg" {...p} />,
+        hr: () => <hr className="my-2 border-border" />,
         ul: (p) => <ul className="my-1.5 list-disc space-y-1 pl-5" {...p} />,
         ol: (p) => <ol className="my-1.5 list-decimal space-y-1 pl-5" {...p} />,
-        a: (p) => <a className="text-glow underline" target="_blank" {...p} />,
-        code: (p) => <code className="rounded bg-background px-1 font-mono text-[0.9em]" {...p} />,
+        a: (p) => <a className="text-accent underline" target="_blank" {...p} />,
+        code: (p) => <code className="rounded bg-surface-0 px-1 font-mono text-[0.9em]" {...p} />,
         pre: (p) => (
           <pre
-            className="my-1.5 overflow-x-auto rounded-lg border border-card-border bg-background p-2.5 text-xs [&_code]:bg-transparent [&_code]:p-0"
+            className="my-1.5 overflow-x-auto rounded-lg border border-border bg-surface-0 p-2.5 text-xs [&_code]:bg-transparent [&_code]:p-0"
             {...p}
           />
         ),
         img: ({ alt, ...p }) => <img alt={alt ?? ""} className="my-1.5 max-w-full rounded-lg" {...p} />,
-        blockquote: (p) => <blockquote className="border-l-2 border-glow/40 pl-3 text-muted" {...p} />,
+        blockquote: (p) => <blockquote className="border-l-2 border-border-strong pl-3 text-muted" {...p} />,
         table: (p) => (
           <div className="my-1.5 overflow-x-auto">
             <table className="w-full border-collapse text-xs" {...p} />
           </div>
         ),
         th: (p) => (
-          <th className="border-b border-card-border px-2 py-1 text-left font-semibold text-glow" {...p} />
+          <th className="border-b border-border px-2 py-1 text-left font-semibold text-fg" {...p} />
         ),
-        td: (p) => <td className="border-b border-card-border/50 px-2 py-1 align-top" {...p} />,
+        td: (p) => <td className="border-b border-border/60 px-2 py-1 align-top" {...p} />,
       }}
     >
       {text.replace(WIKILINK, "$1")}
@@ -446,7 +446,7 @@ export default function ChatPane({
           <div className="flex justify-end">
             <button
               onClick={newChat}
-              className="cursor-pointer rounded border border-card-border px-2 py-0.5 text-[11px] text-muted hover:border-glow/60 hover:text-glow"
+              className="cursor-pointer rounded border border-border px-2 py-0.5 text-[11px] text-muted hover:border-accent-border hover:text-accent"
             >
               New chat
             </button>
@@ -462,9 +462,9 @@ export default function ChatPane({
               onClick={() =>
                 send("Take me through a guided session to find something to watch.")
               }
-              className="mt-6 w-full cursor-pointer rounded-lg border border-glow/40 bg-card px-5 py-4 text-left transition-colors hover:border-glow hover:bg-glow/10"
+              className="mt-6 w-full cursor-pointer rounded-lg border border-accent-border bg-surface-1 px-5 py-4 text-left transition-colors hover:border-accent hover:bg-accent-subtle"
             >
-              <div className="text-sm font-medium text-glow">Find me something to watch</div>
+              <div className="text-sm font-medium text-accent">Find me something to watch</div>
               <div className="mt-1 text-xs text-muted">
                 A few quick questions, then picks tuned to your taste
               </div>
@@ -475,7 +475,7 @@ export default function ChatPane({
             {onOpenHelp && (
               <button
                 onClick={onOpenHelp}
-                className="mt-5 text-xs text-muted underline decoration-dotted underline-offset-4 hover:text-glow"
+                className="mt-5 text-xs text-muted underline decoration-dotted underline-offset-4 hover:text-accent"
               >
                 New here? Start with Help
               </button>
@@ -493,12 +493,12 @@ export default function ChatPane({
             );
           if (msg.role === "user")
             return (
-              <div key={i} className="ml-12 break-words rounded-lg border border-glow/25 bg-glow/10 px-3.5 py-2.5 text-sm">
+              <div key={i} className="ml-12 break-words rounded-lg border border-accent-border bg-accent-subtle px-3.5 py-2.5 text-sm">
                 {msg.text}
               </div>
             );
           return (
-            <div key={i} className="mr-6 break-words rounded-lg border border-card-border bg-card px-3.5 py-2.5 text-sm leading-relaxed">
+            <div key={i} className="mr-6 break-words rounded-lg border border-border bg-surface-1 px-3.5 py-2.5 text-sm leading-relaxed">
               {msg.text ? <Markdown text={msg.text} /> : <span className="animate-pulse text-muted">thinking…</span>}
             </div>
           );
@@ -506,24 +506,24 @@ export default function ChatPane({
         <div ref={bottomRef} />
       </div>
       {busy && (
-        <div className="flex items-center gap-2.5 border-t border-card-border bg-[#12100d] px-5 py-2">
+        <div className="flex items-center gap-2.5 border-t border-border bg-surface-1 px-5 py-2">
           <span className="relative flex h-2.5 w-2.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-glow opacity-60" />
-            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-glow" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent" />
           </span>
-          <span className="text-xs text-glow/90">{activity}</span>
+          <span className="text-xs text-accent">{activity}</span>
           <button
             onClick={() => {
               if (currentTurnRef.current) void stopTurn(currentTurnRef.current);
             }}
-            className="cursor-pointer rounded border border-card-border px-2 py-0.5 text-[11px] text-muted hover:border-glow/60 hover:text-glow"
+            className="cursor-pointer rounded border border-border px-2 py-0.5 text-[11px] text-muted hover:border-accent-border hover:text-accent"
           >
             Stop
           </button>
           {onWatchGraph && (
             <button
               onClick={onWatchGraph}
-              className="cursor-pointer rounded border border-card-border px-2 py-0.5 text-[11px] text-muted hover:border-glow/60 hover:text-glow"
+              className="cursor-pointer rounded border border-border px-2 py-0.5 text-[11px] text-muted hover:border-accent-border hover:text-accent"
             >
               Watch the graph
             </button>
@@ -534,7 +534,7 @@ export default function ChatPane({
         </div>
       )}
       <form
-        className="flex gap-2 border-t border-card-border bg-[#12100d] p-4"
+        className="flex gap-2 border-t border-border bg-surface-1 p-4"
         onSubmit={(e) => {
           e.preventDefault();
           const t = input;
@@ -547,12 +547,12 @@ export default function ChatPane({
           onChange={(e) => setInput(e.target.value)}
           placeholder={busy ? "the expert is working — messages queue up…" : "Talk movies & shows…"}
           // text-base (16px) on mobile stops iOS from auto-zooming on focus; desktop keeps 14px
-          className="flex-1 rounded-md border border-[#3a2f22] bg-[#1c1713] px-3 py-2 text-base outline-none placeholder:text-muted focus:border-glow/60 disabled:opacity-60 md:text-sm"
+          className="flex-1 rounded-md border border-border-strong bg-surface-2 px-3 py-2 text-base outline-none placeholder:text-muted focus:border-accent-border disabled:opacity-60 md:text-sm"
         />
         <button
           type="submit"
           disabled={!input.trim()}
-          className="rounded-md border border-glow/60 px-4 py-2 text-sm text-glow hover:bg-glow/10 disabled:opacity-40"
+          className="rounded-md border border-accent-border px-4 py-2 text-sm text-accent hover:bg-accent-subtle disabled:opacity-40"
         >
           Send
         </button>

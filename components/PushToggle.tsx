@@ -87,17 +87,17 @@ export default function PushToggle() {
   };
 
   return (
-    <div className="rounded-lg border border-card-border bg-card px-4 py-3 text-sm">
+    <div className="rounded-lg border border-border bg-surface-1 px-4 py-3 text-sm">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <div className="font-medium text-glow">Notifications</div>
+          <div className="font-medium text-accent">Notifications</div>
           <div className="mt-0.5 text-xs text-muted">{text[state]}</div>
           {note && <div className="mt-1 text-xs text-muted">{note}</div>}
         </div>
         {(state === "off" || state === "on") && (
           <button
             onClick={state === "on" ? turnOff : turnOn}
-            className="shrink-0 cursor-pointer rounded-md border border-glow/60 px-3 py-1.5 text-xs text-glow hover:bg-glow/10"
+            className="shrink-0 cursor-pointer rounded-md border border-accent-border px-3 py-1.5 text-xs text-accent hover:bg-accent-subtle"
           >
             {state === "on" ? "Turn off" : "Turn on"}
           </button>

@@ -13,9 +13,9 @@ import { emitThinking, traceToThinking } from "@/lib/liveThinking";
 
 const KIND_STYLE: Record<TraceEntry["kind"], string> = {
   init: "text-muted",
-  tool: "text-foreground",
-  error: "text-ember",
-  result: "text-glow",
+  tool: "text-fg",
+  error: "text-danger",
+  result: "text-accent",
   model: "text-muted",
 };
 
@@ -34,11 +34,11 @@ function Booth({ entries }: { entries: TraceEntry[] }) {
         </div>
       )}
       {entries.map((t, i) => (
-        <div key={i} className="flex gap-2 border-b border-card-border/50 py-1.5">
+        <div key={i} className="flex gap-2 border-b border-border/60 py-1.5">
           <span className="shrink-0 text-muted">{t.at}</span>
           <span
             className={`shrink-0 rounded px-1 ${
-              t.sub ? "bg-candle/20 text-candle" : "bg-glow/15 text-glow"
+              t.sub ? "bg-info-subtle text-info" : "bg-accent-muted text-accent"
             }`}
           >
             {t.sub ? "sub" : "main"}
@@ -98,9 +98,9 @@ function MorePanel({ onPick }: { onPick: (p: Panel) => void }) {
         <button
           key={label}
           onClick={() => onPick(id)}
-          className="w-full rounded-lg border border-card-border bg-card p-4 text-left transition-colors hover:border-glow/50"
+          className="w-full rounded-lg border border-border bg-surface-1 p-4 text-left transition-colors hover:border-accent-border"
         >
-          <div className="text-sm font-medium text-glow">{label}</div>
+          <div className="text-sm font-medium text-accent">{label}</div>
           <div className="mt-1 text-xs text-muted">{desc}</div>
         </button>
       ))}
@@ -129,14 +129,14 @@ export default function Home() {
           // intrinsic width, so the pane overflows the phone viewport.
           className={`min-w-0 flex-col ${
             panel
-              ? "hidden md:flex md:w-[46%] md:min-w-[380px] md:border-r md:border-card-border"
+              ? "hidden md:flex md:w-[46%] md:min-w-[380px] md:border-r md:border-border"
               : "flex flex-1"
           }`}
         >
-          <header className="flex items-center gap-3 border-b border-card-border px-5 py-3">
+          <header className="flex items-center gap-3 border-b border-border px-5 py-3">
             { }
             <img src="/icon.png" alt="Louie" className="h-8 w-8 louie-growl" />
-            <h1 className="text-lg font-semibold tracking-wide text-glow">
+            <h1 className="text-lg font-semibold tracking-wide text-accent">
               Marquee
             </h1>
             <span className="flex min-w-0 flex-col leading-tight">
@@ -144,7 +144,7 @@ export default function Home() {
               {model && (
                 <span
                   title="model the API served for the last reply"
-                  className="truncate font-mono text-[10px] text-muted/70"
+                  className="truncate font-mono text-[10px] text-faint"
                 >
                   {model}
                 </span>
@@ -156,7 +156,7 @@ export default function Home() {
                   <button
                     key={id}
                     onClick={() => setPanel(id)}
-                    className="rounded-md px-3 py-1 text-xs text-muted transition-colors hover:bg-glow/10 hover:text-glow"
+                    className="rounded-md px-3 py-1 text-xs text-muted transition-colors hover:bg-accent-subtle hover:text-accent"
                   >
                     {label}
                   </button>
@@ -187,15 +187,15 @@ export default function Home() {
           className={`relative min-w-0 flex-1 flex-col ${panel ? "flex" : "hidden"}`}
         >
             {/* desktop tab strip */}
-            <div className="hidden items-center gap-1 border-b border-card-border px-4 py-2 md:flex">
+            <div className="hidden items-center gap-1 border-b border-border px-4 py-2 md:flex">
               {TABS.map(([id, label]) => (
                 <button
                   key={id}
                   onClick={() => setPanel(id)}
                   className={`rounded-md px-3 py-1 text-xs transition-colors ${
                     panel === id
-                      ? "bg-glow/15 text-glow"
-                      : "text-muted hover:text-foreground"
+                      ? "bg-accent-muted text-accent"
+                      : "text-muted hover:text-fg"
                   }`}
                 >
                   {label}
@@ -203,15 +203,15 @@ export default function Home() {
               ))}
               {panel === "graph" && (
                 <span className="ml-auto text-xs text-muted">
-                  <span className="text-glow">liked</span> ·{" "}
-                  <span className="text-ember">disliked</span> ·{" "}
-                  <span className="text-candle">genres</span> ·{" "}
-                  <span className="opacity-50 text-glow">watchlist</span>
+                  <span className="text-accent">liked</span> ·{" "}
+                  <span className="text-danger">disliked</span> ·{" "}
+                  <span className="text-fg">genres</span> ·{" "}
+                  <span className="opacity-50 text-accent">watchlist</span>
                 </span>
               )}
               <button
                 onClick={() => setPanel(null)}
-                className={`rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-glow/10 hover:text-glow ${
+                className={`rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-accent-subtle hover:text-accent ${
                   panel === "graph" ? "" : "ml-auto"
                 }`}
                 title="Close panel"
@@ -220,21 +220,21 @@ export default function Home() {
               </button>
             </div>
             {/* mobile slim title bar — bottom nav handles switching */}
-            <div className="flex items-center justify-between border-b border-card-border px-4 py-3 md:hidden">
-              <span className="text-sm font-medium text-glow">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3 md:hidden">
+              <span className="text-sm font-medium text-accent">
                 {panel && PANEL_TITLE[panel]}
               </span>
               {panel === "predict" || panel === "booth" || panel === "help" ? (
                 <button
                   onClick={() => setPanel("more")}
-                  className="text-xs text-muted transition-colors hover:text-glow"
+                  className="text-xs text-muted transition-colors hover:text-accent"
                 >
                   ‹ More
                 </button>
               ) : (
                 <button
                   onClick={() => setPanel(null)}
-                  className="text-xs text-muted transition-colors hover:text-glow"
+                  className="text-xs text-muted transition-colors hover:text-accent"
                 >
                   Close
                 </button>
@@ -264,7 +264,7 @@ export default function Home() {
           </section>
       </div>
       {/* mobile-only bottom navigation; pads around the home-indicator safe area */}
-      <nav className="flex border-t border-card-border pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav className="flex border-t border-border pb-[env(safe-area-inset-bottom)] md:hidden">
         {BOTTOM_TABS.map(([id, label]) => {
           const active =
             id === "more"
@@ -275,7 +275,7 @@ export default function Home() {
               key={label}
               onClick={() => setPanel(id)}
               className={`flex flex-1 items-center justify-center py-3.5 text-xs transition-colors ${
-                active ? "text-glow" : "text-muted"
+                active ? "text-accent" : "text-muted"
               }`}
             >
               {label}

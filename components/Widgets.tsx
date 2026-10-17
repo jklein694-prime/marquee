@@ -62,8 +62,8 @@ export function OptionPicker({
   };
 
   return (
-    <div className={`rounded-lg border border-card-border bg-card p-4 ${answered ? "opacity-60" : ""}`}>
-      <div className="mb-1 text-sm font-medium text-glow">{data.title}</div>
+    <div className={`rounded-lg border border-border bg-surface-1 p-4 ${answered ? "opacity-60" : ""}`}>
+      <div className="mb-1 text-sm font-medium text-accent">{data.title}</div>
       {data.context && <div className="mb-2 text-xs text-muted">{data.context}</div>}
       <div className="flex flex-col gap-2">
         {data.options.map((o) => (
@@ -73,9 +73,9 @@ export function OptionPicker({
             onClick={() => toggle(o.label)}
             className={`w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors ${
               picked.has(o.label)
-                ? "border-glow bg-glow/20 text-glow"
-                : "border-card-border bg-transparent text-foreground"
-            } ${locked && !answered ? "cursor-wait opacity-50" : answered ? "cursor-default" : "cursor-pointer hover:border-glow/60"}`}
+                ? "border-accent bg-accent-muted text-accent"
+                : "border-border bg-transparent text-fg"
+            } ${locked && !answered ? "cursor-wait opacity-50" : answered ? "cursor-default" : "cursor-pointer hover:border-accent-border"}`}
           >
             <div className="font-medium">{o.label}</div>
             {o.sublabel && <div className="mt-1 text-xs text-muted">{o.sublabel}</div>}
@@ -89,12 +89,12 @@ export function OptionPicker({
             onChange={(e) => setComment(e.target.value)}
             disabled={locked}
             placeholder="Anything else? Steer me… (optional)"
-            className="mt-3 w-full rounded-md border border-card-border bg-background px-2 py-1.5 text-xs outline-none placeholder:text-muted focus:border-glow/60"
+            className="mt-3 w-full rounded-md border border-border bg-surface-0 px-2 py-1.5 text-xs outline-none placeholder:text-muted focus:border-accent-border"
           />
           <button
             onClick={confirm}
             disabled={(!picked.size && !comment.trim()) || locked}
-            className="mt-2 rounded-md border border-glow/60 px-3 py-1 text-sm text-glow hover:bg-glow/10 disabled:opacity-40"
+            className="mt-2 rounded-md border border-accent-border px-3 py-1 text-sm text-accent hover:bg-accent-subtle disabled:opacity-40"
           >
             Confirm
           </button>
@@ -150,8 +150,8 @@ export function MovieChecklist({
   };
 
   return (
-    <div className={`rounded-lg border border-card-border bg-card p-4 ${answered ? "opacity-60" : ""}`}>
-      <div className="mb-2 text-sm font-medium text-glow">{data.title}</div>
+    <div className={`rounded-lg border border-border bg-surface-1 p-4 ${answered ? "opacity-60" : ""}`}>
+      <div className="mb-2 text-sm font-medium text-accent">{data.title}</div>
       <div className="space-y-2">
         {data.movies.map((m) => {
           const key = label(m);
@@ -171,7 +171,7 @@ export function MovieChecklist({
                       return next;
                     })
                   }
-                  className="h-4 w-4 accent-[#f5b942]"
+                  className="h-4 w-4 accent-accent"
                 />
                 {key}
               </label>
@@ -184,8 +184,8 @@ export function MovieChecklist({
                       onClick={() => setSeen((s) => ({ ...s, [key]: n }))}
                       className={`h-9 w-9 rounded text-[11px] leading-none transition-colors md:h-6 md:w-6 ${
                         seen[key] === n
-                          ? "bg-glow text-background font-semibold"
-                          : "border border-card-border text-muted hover:border-glow/60 hover:text-foreground"
+                          ? "bg-accent text-accent-text font-semibold"
+                          : "border border-border text-muted hover:border-accent-border hover:text-fg"
                       }`}
                     >
                       {n}
@@ -204,12 +204,12 @@ export function MovieChecklist({
             onChange={(e) => setComment(e.target.value)}
             disabled={locked}
             placeholder="Anything else? Steer me… (optional)"
-            className="mt-3 w-full rounded-md border border-card-border bg-background px-2 py-1.5 text-xs outline-none placeholder:text-muted focus:border-glow/60"
+            className="mt-3 w-full rounded-md border border-border bg-surface-0 px-2 py-1.5 text-xs outline-none placeholder:text-muted focus:border-accent-border"
           />
           <button
             onClick={submit}
             disabled={locked}
-            className="mt-2 rounded-md border border-glow/60 px-3 py-1 text-sm text-glow hover:bg-glow/10 disabled:opacity-40"
+            className="mt-2 rounded-md border border-accent-border px-3 py-1 text-sm text-accent hover:bg-accent-subtle disabled:opacity-40"
           >
             Confirm
           </button>
@@ -234,7 +234,7 @@ export function MovieCards({ data }: { data: RecsData }) {
       {data.movies.map((m) => (
         <div
           key={`${m.title}-${m.year}`}
-          className="w-44 shrink-0 overflow-hidden rounded-lg border border-card-border bg-card"
+          className="w-44 shrink-0 overflow-hidden rounded-lg border border-border bg-surface-1"
         >
           {m.poster_path ? (
              
@@ -244,7 +244,7 @@ export function MovieCards({ data }: { data: RecsData }) {
               className="h-56 w-full object-cover"
             />
           ) : (
-            <div className="flex h-56 w-full items-center justify-center bg-background text-xs text-muted">
+            <div className="flex h-56 w-full items-center justify-center bg-surface-0 text-xs text-muted">
               no poster
             </div>
           )}
@@ -253,11 +253,11 @@ export function MovieCards({ data }: { data: RecsData }) {
               {m.title} <span className="text-muted">({m.year})</span>
             </div>
             {m.genres && (
-              <div className="mt-1 text-[11px] text-candle">{m.genres.join(" · ")}</div>
+              <div className="mt-1 text-[11px] text-fg">{m.genres.join(" · ")}</div>
             )}
             <div className="mt-1 line-clamp-3 text-xs text-muted">{m.why}</div>
             {m.streaming && (
-              <div className="mt-1.5 inline-block rounded bg-glow/15 px-1.5 py-0.5 text-[11px] text-glow">
+              <div className="mt-1.5 inline-block rounded bg-accent-muted px-1.5 py-0.5 text-[11px] text-accent">
                 {m.streaming}
               </div>
             )}
@@ -284,7 +284,7 @@ export function MovieCards({ data }: { data: RecsData }) {
                   .catch(() => setAdded((a) => { const n = new Set(a); n.delete(key); return n; }));
               }}
               disabled={added.has(`${m.title}-${m.year}`)}
-              className="mt-2 w-full rounded-md border border-glow/50 py-1 text-xs text-glow hover:bg-glow/10 disabled:opacity-60"
+              className="mt-2 w-full rounded-md border border-accent-border py-1 text-xs text-accent hover:bg-accent-subtle disabled:opacity-60"
             >
               {added.has(`${m.title}-${m.year}`) ? "✓ on your watchlist" : "+ Watchlist"}
             </button>

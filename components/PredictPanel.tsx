@@ -13,6 +13,7 @@ import {
   pinNodes,
 } from "./useHeatEngine";
 import { TitleSearch, type SearchResult } from "./QuickRate";
+import { graphPalette } from "@/lib/theme";
 
 const Graph3D = dynamic(() => import("./Graph3D"), { ssr: false });
 
@@ -95,8 +96,7 @@ export default function PredictPanel() {
       const a = heatEmptyRef.current ? 0.3 + 0.12 * Math.sin(Date.now() / 250) : 0.35;
       return `rgba(${r},${g},${b},${a})`;
     },
-    coldLink: (l) =>
-      (l as { ghost?: boolean }).ghost ? "rgba(232,220,200,0.3)" : "#2a221a",
+    coldLink: (l) => ((l as { ghost?: boolean }).ghost ? graphPalette().edgeGhost : graphPalette().edge),
   });
   heatEmptyRef.current = engine.heatRef.current.size === 0;
 
@@ -294,7 +294,7 @@ export default function PredictPanel() {
     return (
       <div className="h-full space-y-4 overflow-y-auto px-5 py-4">
         <div>
-          <div className="mb-1.5 text-sm font-medium text-glow">Screen Test</div>
+          <div className="mb-1.5 text-sm font-medium text-accent">Screen Test</div>
           <div className="mb-2 text-xs text-muted">
             Search any movie or show and Louie screens it against your taste
             graph — watch the reasoning light up, then get his projected rating.
@@ -313,7 +313,7 @@ export default function PredictPanel() {
           width={size.width}
           height={size.height}
           graphData={liveData}
-          backgroundColor="#0c0a08"
+          backgroundColor={graphPalette().background}
           controlType="orbit"
           showNavInfo={false}
           enableNodeDrag={false}
@@ -322,7 +322,7 @@ export default function PredictPanel() {
       )}
 
       {picked && (
-        <div className="absolute left-3 top-3 z-10 flex items-center gap-3 rounded-lg border border-card-border bg-card/90 p-2 pr-3 backdrop-blur-sm">
+        <div className="absolute left-3 top-3 z-10 flex items-center gap-3 rounded-lg border border-border bg-surface-1/90 p-2 pr-3 backdrop-blur-sm">
           {picked.poster_path && (
              
             <img
@@ -339,14 +339,14 @@ export default function PredictPanel() {
             </div>
             {phase === "thinking" && (
               <div className="text-[11px] text-muted">
-                <span className="animate-pulse text-glow">●</span> {status}
+                <span className="animate-pulse text-accent">●</span> {status}
               </div>
             )}
           </div>
           {phase === "thinking" && (
             <button
               onClick={reset}
-              className="ml-1 text-xs text-muted hover:text-foreground"
+              className="ml-1 text-xs text-muted hover:text-fg"
             >
               cancel
             </button>
@@ -358,7 +358,7 @@ export default function PredictPanel() {
 
       {phase === "done" && verdict && picked && (
         <div className="absolute inset-0 z-20 flex items-center justify-center p-6">
-          <div className="max-h-full w-96 max-w-full overflow-y-auto rounded-lg border border-card-border bg-card/95 p-5 backdrop-blur-sm">
+          <div className="max-h-full w-96 max-w-full overflow-y-auto rounded-lg border border-border bg-surface-1/95 p-5 backdrop-blur-sm">
             <div className="flex gap-4">
               {picked.poster_path && (
                  
@@ -373,7 +373,7 @@ export default function PredictPanel() {
                   {picked.title}
                   {picked.year && <span className="text-muted"> ({picked.year})</span>}
                 </div>
-                <div className="mt-2 text-2xl font-semibold text-glow">
+                <div className="mt-2 text-2xl font-semibold text-accent">
                   {verdict.seen
                     ? `You rated it ${verdict.actual}/10`
                     : `Louie predicts ${verdict.predicted.replace("-", "–")}`}
@@ -386,7 +386,7 @@ export default function PredictPanel() {
                 <button
                   onClick={addToWatchlist}
                   disabled={added !== "no"}
-                  className="rounded-md bg-glow/15 px-3 py-1.5 text-xs text-glow hover:bg-glow/25 disabled:opacity-60"
+                  className="rounded-md bg-accent-muted px-3 py-1.5 text-xs text-accent hover:bg-accent-muted disabled:opacity-60"
                 >
                   {added === "yes" ? "Added." : added === "saving" ? "Adding…" : "+ My watchlist"}
                 </button>
@@ -396,7 +396,7 @@ export default function PredictPanel() {
               )}
               <button
                 onClick={reset}
-                className="rounded-md px-3 py-1.5 text-xs text-muted hover:text-glow"
+                className="rounded-md px-3 py-1.5 text-xs text-muted hover:text-accent"
               >
                 Search another
               </button>
@@ -407,19 +407,19 @@ export default function PredictPanel() {
 
       {phase === "error" && picked && (
         <div className="absolute inset-0 z-20 flex items-center justify-center p-6">
-          <div className="w-96 max-w-full rounded-lg border border-card-border bg-card/95 p-5 backdrop-blur-sm">
-            <div className="text-sm font-medium text-ember">The screening broke down</div>
+          <div className="w-96 max-w-full rounded-lg border border-border bg-surface-1/95 p-5 backdrop-blur-sm">
+            <div className="text-sm font-medium text-danger">The screening broke down</div>
             <div className="mt-1 break-words text-xs text-muted">{errorMsg}</div>
             <div className="mt-4 flex gap-2">
               <button
                 onClick={() => start(picked)}
-                className="rounded-md bg-glow/15 px-3 py-1.5 text-xs text-glow hover:bg-glow/25"
+                className="rounded-md bg-accent-muted px-3 py-1.5 text-xs text-accent hover:bg-accent-muted"
               >
                 Try again
               </button>
               <button
                 onClick={reset}
-                className="rounded-md px-3 py-1.5 text-xs text-muted hover:text-glow"
+                className="rounded-md px-3 py-1.5 text-xs text-muted hover:text-accent"
               >
                 Search another
               </button>

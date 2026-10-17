@@ -50,7 +50,7 @@ export function TitleSearch({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search a title…"
-        className="w-full rounded-md border border-card-border bg-card px-3 py-2 text-sm outline-none placeholder:text-muted focus:border-glow/60"
+        className="w-full rounded-md border border-border bg-surface-1 px-3 py-2 text-sm outline-none placeholder:text-muted focus:border-accent-border"
       />
       {searching && <div className="text-xs text-muted">searching…</div>}
       {shown.map((r) => (
@@ -61,7 +61,7 @@ export function TitleSearch({
             setResults([]);
             onPick(r);
           }}
-          className="flex w-full items-center gap-3 rounded-lg border border-card-border bg-card p-2.5 text-left hover:border-glow/60"
+          className="flex w-full items-center gap-3 rounded-lg border border-border bg-surface-1 p-2.5 text-left hover:border-accent-border"
         >
           {r.poster_path ? (
              
@@ -71,7 +71,7 @@ export function TitleSearch({
               className="h-16 w-11 shrink-0 rounded object-cover"
             />
           ) : (
-            <div className="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-background text-center text-[9px] text-muted">
+            <div className="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-surface-0 text-center text-[9px] text-muted">
               no poster
             </div>
           )}
@@ -125,7 +125,7 @@ export default function QuickRate({ onChat }: { onChat: ChatSend }) {
   return (
     <div className="h-full space-y-4 overflow-y-auto px-5 py-4">
       <div>
-        <div className="mb-1.5 text-sm font-medium text-glow">Quick rate</div>
+        <div className="mb-1.5 text-sm font-medium text-accent">Quick rate</div>
         <div className="mb-2 text-xs text-muted">
           Search any movie or show, rate it, and it logs to your taste graph
           in the background — no need to add it to your watchlist first.
@@ -133,7 +133,7 @@ export default function QuickRate({ onChat }: { onChat: ChatSend }) {
       </div>
 
       {picked ? (
-        <div className="rounded-lg border border-card-border bg-card p-2.5">
+        <div className="rounded-lg border border-border bg-surface-1 p-2.5">
           <div className="flex gap-3">
             {picked.poster_path ? (
                
@@ -143,7 +143,7 @@ export default function QuickRate({ onChat }: { onChat: ChatSend }) {
                 className="h-24 w-16 shrink-0 rounded object-cover"
               />
             ) : (
-              <div className="flex h-24 w-16 shrink-0 items-center justify-center rounded bg-background text-center text-[10px] text-muted">
+              <div className="flex h-24 w-16 shrink-0 items-center justify-center rounded bg-surface-0 text-center text-[10px] text-muted">
                 no poster
               </div>
             )}
@@ -152,7 +152,7 @@ export default function QuickRate({ onChat }: { onChat: ChatSend }) {
                 {picked.title}
                 {picked.year && <span className="text-muted"> ({picked.year})</span>}
               </div>
-              <span className="mt-1 inline-block rounded bg-glow/15 px-1.5 py-0.5 text-[11px] text-glow">
+              <span className="mt-1 inline-block rounded bg-accent-muted px-1.5 py-0.5 text-[11px] text-accent">
                 {picked.media === "tv" ? "TV" : "Movie"}
               </span>
               <ReviewForm title={picked.title} onSubmit={submit} onCancel={() => setPicked(null)} />
@@ -164,9 +164,9 @@ export default function QuickRate({ onChat }: { onChat: ChatSend }) {
       )}
 
       {(pending.length > 0 || logged.length > 0) && (
-        <div className="space-y-1.5 border-t border-card-border pt-3">
+        <div className="space-y-1.5 border-t border-border pt-3">
           {pending.map((p) => (
-            <div key={p.id} className="flex items-center gap-2 text-xs text-glow">
+            <div key={p.id} className="flex items-center gap-2 text-xs text-accent">
               <span className="animate-pulse">●</span> logging {p.label}…
             </div>
           ))}

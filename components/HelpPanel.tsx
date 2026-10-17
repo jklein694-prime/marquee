@@ -215,12 +215,12 @@ export default function HelpPanel() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="sticky top-0 z-10 flex flex-wrap gap-1 border-b border-card-border bg-background/95 px-4 py-2 backdrop-blur-sm">
+      <div className="sticky top-0 z-10 flex flex-wrap gap-1 border-b border-border bg-surface-0/95 px-4 py-2 backdrop-blur-sm">
         {SECTIONS.map((s) => (
           <button
             key={s.id}
             onClick={() => jump(s.id)}
-            className="rounded-md px-2.5 py-1 text-[11px] text-muted transition-colors hover:bg-glow/10 hover:text-glow"
+            className="rounded-md px-2.5 py-1 text-[11px] text-muted transition-colors hover:bg-accent-subtle hover:text-accent"
           >
             {s.title}
           </button>
@@ -228,7 +228,7 @@ export default function HelpPanel() {
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         <div className="mb-5">
-          <h1 className="text-lg font-semibold text-glow">Marquee — how it works</h1>
+          <h1 className="text-lg font-semibold text-accent">Marquee — how it works</h1>
           <p className="mt-1 text-sm text-muted">
             A quick guide to Louie, the tabs, and your taste graph. Jump to any
             section using the bar above.
@@ -236,7 +236,7 @@ export default function HelpPanel() {
         </div>
         {SECTIONS.map((s) => (
           <section key={s.id} id={`help-${s.id}`} className="mb-6 scroll-mt-2">
-            <h2 className="mb-1.5 border-b border-card-border/60 pb-1 text-sm font-semibold text-glow">
+            <h2 className="mb-1.5 border-b border-border/60 pb-1 text-sm font-semibold text-accent">
               {s.title}
             </h2>
             <div className="text-sm leading-relaxed">
@@ -247,7 +247,7 @@ export default function HelpPanel() {
         <div className="mb-6">
           <PushToggle />
         </div>
-        <div className="mt-2 border-t border-card-border pt-3 text-xs text-muted">
+        <div className="mt-2 border-t border-border pt-3 text-xs text-muted">
           This guide is kept in sync with the app as features change.
         </div>
       </div>

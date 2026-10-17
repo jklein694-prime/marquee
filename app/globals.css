@@ -1,43 +1,134 @@
 @import "tailwindcss";
 
+/*
+  Marquee design tokens — one role per token (PLAN.md §2).
+
+  - surfaces: a real 4-step scale instead of "background + card"
+  - text: fg / muted / faint; muted is the floor for anything informational
+  - accent: the ONLY amber in UI chrome (brand, primary action, selection)
+  - status: danger / success / info
+  - graph: verdict is ordinal (lightness), kind is categorical (hue)
+
+  Canvas and three.js code reads these through lib/theme.ts, so the CSS is
+  the single source of truth. Graph tokens are plain hex (6 or 8 digit) on
+  purpose: three.js and the 2D canvas parse those, not modern rgb() syntax.
+*/
 :root {
-  --background: #0c0a08;
-  --foreground: #e8dcc8;
-  --glow: #f5b942;
-  --card: #161210;
-  --card-border: #2a221a;
-  --ember: #b3402e;
-  --candle: #e07b39;
-  --muted: #a89d90;
+  color-scheme: dark;
+
+  --surface-0: #0c0a08; /* page */
+  --surface-1: #14110e; /* panels, cards */
+  --surface-2: #1c1713; /* inputs, nested cards, chat bar */
+  --surface-3: #241e18; /* hover / pressed, menus */
+  --border: #2a221a;
+  --border-strong: #3a2f22;
+
+  --fg: #e8dcc8;
+  --muted: #a89d90; /* 7.0:1 on a card — AA at 12px and up */
+  --faint: #6f665c; /* decorative only, never for information */
+
+  --accent: #f5b942;
+  --accent-text: #0c0a08; /* text on a filled accent button */
+  --accent-subtle: rgb(245 185 66 / 0.1); /* hover wash */
+  --accent-muted: rgb(245 185 66 / 0.18); /* selected chip, active tab */
+  --accent-border: rgb(245 185 66 / 0.55); /* outlined primary button */
+  --focus: #f5b942;
+
+  --danger: #d4563f; /* 4.6:1 on a card — text and outlines */
+  --danger-deep: #b3402e; /* fills */
+  --danger-subtle: rgb(212 86 63 / 0.12);
+  --success: #8fae6b;
+  --success-subtle: rgb(143 174 107 / 0.15);
+  --info: #7fa3b8; /* factual badges such as "Louie predicts" */
+  --info-subtle: rgb(127 163 184 / 0.15);
+
+  --verdict-loved: #f5b942;
+  --verdict-liked: #d19a4a;
+  --verdict-meh: #8a8178;
+  --verdict-disliked: #c0452f;
+  --node-unrated: #5a5048; /* a movie page without a verdict: visibly "not data" */
+  --node-category: #7fa3b8; /* cool steel: structure, not taste */
+  --node-taste: #e8dcc8;
+  --node-watchlist: #f5b94266; /* translucent loved: on the list, not yet a verdict */
+  --node-ghost: #e8dcc855;
+  --edge: #2a221a;
+  --edge-ghost: #e8dcc840;
+  --edge-active: #f5b942;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-glow: var(--glow);
-  --color-card: var(--card);
-  --color-card-border: var(--card-border);
-  --color-ember: var(--ember);
-  --color-candle: var(--candle);
+  --color-surface-0: var(--surface-0);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
   --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-text: var(--accent-text);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-muted: var(--accent-muted);
+  --color-accent-border: var(--accent-border);
+  --color-focus: var(--focus);
+  --color-danger: var(--danger);
+  --color-danger-deep: var(--danger-deep);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
+  --color-info: var(--info);
+  --color-info-subtle: var(--info-subtle);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+html {
+  background: var(--surface-0);
+  /* no rubber-banding or pull-to-refresh fighting the fixed app shell */
+  overscroll-behavior: none;
 }
 
-/* theater vignette — fixed overlay, never intercepts clicks; kept subtle so it
-   never swallows the chat input at the bottom edge */
+body {
+  background: var(--surface-0);
+  color: var(--fg);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+/* every control: no double-tap zoom delay, a visible focus ring, a pressed state */
+button,
+[role="button"],
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+button:active:not(:disabled),
+[role="button"]:active {
+  filter: brightness(1.12);
+}
+
+/* theater vignette — desktop only: on a phone it dims the bottom nav and
+   costs a full-screen compositing layer for nothing */
 .vignette {
+  display: none;
   position: fixed;
   inset: 0;
   pointer-events: none;
   background: radial-gradient(ellipse at center, transparent 75%, rgba(0, 0, 0, 0.25));
   z-index: 50;
+}
+@media (min-width: 768px) {
+  .vignette {
+    display: block;
+  }
 }
 
 /* soft square edge fade — no hard borders, no circles */
@@ -65,34 +156,78 @@ body {
   animation: subtitle-rise 0.35s ease-out;
 }
 
+/* bottom sheet (mobile node details, menus) */
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.sheet-up {
+  animation: sheet-up 0.22s ease-out;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--card-border);
+  background: var(--border);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 
+/* hide the scrollbar on horizontal chip rows without disabling scrolling */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Louie's page-open growl: a pomeranian puffing up — quick swell, a fierce
    little full-body bristle, then settles. Runs once, ~1.1s after load. */
 @keyframes louie-growl {
-  0%, 100% { transform: scale(1) rotate(0deg); }
-  12% { transform: scale(1.18) rotate(0deg); }
-  20% { transform: scale(1.18) rotate(-4deg); }
-  28% { transform: scale(1.18) rotate(4deg); }
-  36% { transform: scale(1.16) rotate(-3deg); }
-  44% { transform: scale(1.16) rotate(3deg); }
-  52% { transform: scale(1.14) rotate(-2deg); }
-  60% { transform: scale(1.12) rotate(2deg); }
-  75% { transform: scale(1.06) rotate(-1deg); }
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+  12% {
+    transform: scale(1.18) rotate(0deg);
+  }
+  20% {
+    transform: scale(1.18) rotate(-4deg);
+  }
+  28% {
+    transform: scale(1.18) rotate(4deg);
+  }
+  36% {
+    transform: scale(1.16) rotate(-3deg);
+  }
+  44% {
+    transform: scale(1.16) rotate(3deg);
+  }
+  52% {
+    transform: scale(1.14) rotate(-2deg);
+  }
+  60% {
+    transform: scale(1.12) rotate(2deg);
+  }
+  75% {
+    transform: scale(1.06) rotate(-1deg);
+  }
 }
 .louie-growl {
   animation: louie-growl 1.1s ease-in-out 0.4s 1;
   transform-origin: 50% 80%; /* bristle from the paws up, not spin in place */
 }
 @media (prefers-reduced-motion: reduce) {
-  .louie-growl { animation: none; }
+  .louie-growl,
+  .subtitle-rise,
+  .sheet-up {
+    animation: none;
+  }
 }

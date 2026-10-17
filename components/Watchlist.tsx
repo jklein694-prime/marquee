@@ -29,7 +29,7 @@ export function ReviewForm({
   const [rating, setRating] = useState<number | null>(null);
   const [review, setReview] = useState("");
   return (
-    <div className="mt-2 rounded-md border border-card-border bg-background/60 p-2.5">
+    <div className="mt-2 rounded-md border border-border bg-surface-2 p-2.5">
       <div className="mb-1.5 text-xs text-muted">
         How was {title}? Rate it:
       </div>
@@ -40,8 +40,8 @@ export function ReviewForm({
             onClick={() => setRating(n)}
             className={`h-9 w-9 rounded text-[11px] md:h-6 md:w-6 ${
               rating === n
-                ? "bg-glow font-semibold text-background"
-                : "border border-card-border text-muted hover:text-glow"
+                ? "bg-accent font-semibold text-accent-text"
+                : "border border-border text-muted hover:text-accent"
             }`}
           >
             {n}
@@ -53,19 +53,19 @@ export function ReviewForm({
         onChange={(e) => setReview(e.target.value)}
         placeholder="Any thoughts? (optional)"
         rows={2}
-        className="mt-2 w-full resize-none rounded-md border border-card-border bg-background px-2 py-1.5 text-xs outline-none focus:border-glow/60"
+        className="mt-2 w-full resize-none rounded-md border border-border bg-surface-0 px-2 py-1.5 text-xs outline-none focus:border-accent-border"
       />
       <div className="mt-1.5 flex gap-2">
         <button
           onClick={() => rating && onSubmit(rating, review.trim())}
           disabled={!rating}
-          className="rounded-md border border-glow/60 px-3 py-1 text-xs text-glow hover:bg-glow/10 disabled:opacity-40"
+          className="rounded-md border border-accent-border px-3 py-1 text-xs text-accent hover:bg-accent-subtle disabled:opacity-40"
         >
           Log it
         </button>
         <button
           onClick={onCancel}
-          className="rounded-md px-2 py-1 text-xs text-muted hover:text-foreground"
+          className="rounded-md px-2 py-1 text-xs text-muted hover:text-fg"
         >
           Cancel
         </button>
@@ -128,19 +128,19 @@ function MoreMenu({ items }: { items: MenuItem[] }) {
       <button
         onClick={() => (open ? close() : setOpen(true))}
         title="More actions"
-        className="flex h-6 w-6 items-center justify-center rounded-md border border-card-border text-muted hover:border-glow/60 hover:text-glow"
+        className="flex h-6 w-6 items-center justify-center rounded-md border border-border text-muted hover:border-accent-border hover:text-accent"
       >
         ⋮
       </button>
       {open && (
-        <div className="absolute right-0 top-7 z-20 w-56 overflow-hidden rounded-md border border-card-border bg-card shadow-lg">
+        <div className="absolute right-0 top-7 z-20 w-56 overflow-hidden rounded-md border border-border bg-surface-1 shadow-lg">
           {!active ? (
             items.map((it) => (
               <button
                 key={it.label}
                 onClick={() => pick(it)}
                 className={`block w-full px-3 py-1.5 text-left text-[11px] ${
-                  it.tone === "danger" ? "text-ember hover:bg-ember/10" : "text-muted hover:bg-glow/10 hover:text-glow"
+                  it.tone === "danger" ? "text-danger hover:bg-danger-subtle" : "text-muted hover:bg-accent-subtle hover:text-accent"
                 }`}
               >
                 {it.label}
@@ -148,7 +148,7 @@ function MoreMenu({ items }: { items: MenuItem[] }) {
             ))
           ) : (
             <div className="p-2.5">
-              <div className="mb-1.5 text-[11px] font-medium text-foreground">
+              <div className="mb-1.5 text-[11px] font-medium text-fg">
                 {active.label} — reason (optional)
               </div>
               <textarea
@@ -157,7 +157,7 @@ function MoreMenu({ items }: { items: MenuItem[] }) {
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="e.g. too slow-paced for me"
                 rows={2}
-                className="w-full resize-none rounded-md border border-card-border bg-background px-2 py-1.5 text-xs outline-none focus:border-glow/60"
+                className="w-full resize-none rounded-md border border-border bg-surface-0 px-2 py-1.5 text-xs outline-none focus:border-accent-border"
               />
               <div className="mt-1.5 flex gap-1.5">
                 <button
@@ -167,8 +167,8 @@ function MoreMenu({ items }: { items: MenuItem[] }) {
                   }}
                   className={`rounded-md border px-2 py-1 text-[11px] ${
                     active.tone === "danger"
-                      ? "border-ember/60 text-ember hover:bg-ember/10"
-                      : "border-glow/60 text-glow hover:bg-glow/10"
+                      ? "border-danger/60 text-danger hover:bg-danger-subtle"
+                      : "border-accent-border text-accent hover:bg-accent-subtle"
                   }`}
                 >
                   Confirm
@@ -178,7 +178,7 @@ function MoreMenu({ items }: { items: MenuItem[] }) {
                     setActive(null);
                     setReason("");
                   }}
-                  className="rounded-md px-2 py-1 text-[11px] text-muted hover:text-foreground"
+                  className="rounded-md px-2 py-1 text-[11px] text-muted hover:text-fg"
                 >
                   Cancel
                 </button>
@@ -214,7 +214,7 @@ function Card({
   return (
     <div
       {...dragProps}
-      className={`rounded-lg border border-card-border bg-card p-2.5 ${
+      className={`rounded-lg border border-border bg-surface-1 p-2.5 ${
         dragProps?.draggable ? "cursor-grab active:cursor-grabbing" : ""
       }`}
     >
@@ -228,7 +228,7 @@ function Card({
             draggable={false}
           />
         ) : (
-          <div className="flex h-24 w-16 shrink-0 items-center justify-center rounded bg-background text-center text-[10px] text-muted">
+          <div className="flex h-24 w-16 shrink-0 items-center justify-center rounded bg-surface-0 text-center text-[10px] text-muted">
             no poster
           </div>
         )}
@@ -244,7 +244,7 @@ function Card({
               canonicalServices(item.streaming).slice(0, 3).map((s) => (
                 <span
                   key={s}
-                  className="rounded bg-glow/15 px-1.5 py-0.5 text-[11px] text-glow"
+                  className="rounded bg-accent-muted px-1.5 py-0.5 text-[11px] text-accent"
                 >
                   {s}
                 </span>
@@ -254,7 +254,7 @@ function Card({
             )}
             {item.predicted && (
               <span
-                className="rounded bg-candle/15 px-1.5 py-0.5 text-[11px] text-candle"
+                className="rounded bg-info-subtle px-1.5 py-0.5 text-[11px] text-info"
                 title="Louie's projected score based on your taste"
               >
                 Louie predicts {item.predicted.replace("-", "–")}
@@ -269,17 +269,17 @@ function Card({
           {(item.note || item.overview) && (
             <button
               onClick={() => setExpanded((v) => !v)}
-              className="mt-0.5 text-[11px] font-medium text-glow hover:underline"
+              className="mt-0.5 text-[11px] font-medium text-accent hover:underline"
             >
               {expanded ? "Show less" : "Show more"}
             </button>
           )}
           {expanded && (item.note || item.predicted) && (
-            <div className="mt-1.5 rounded-md border border-card-border bg-background/60 p-2 text-xs leading-relaxed text-muted">
-              <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold text-foreground">
+            <div className="mt-1.5 rounded-md border border-border bg-surface-2 p-2 text-xs leading-relaxed text-muted">
+              <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold text-fg">
                 Why Louie picked this
                 {item.predicted && (
-                  <span className="rounded bg-candle/15 px-1.5 py-0.5 font-normal text-candle">
+                  <span className="rounded bg-info-subtle px-1.5 py-0.5 font-normal text-info">
                     projected {item.predicted.replace("-", "–")}/10
                   </span>
                 )}
@@ -288,8 +288,8 @@ function Card({
             </div>
           )}
           {expanded && item.overview && (
-            <div className="mt-1.5 rounded-md border border-card-border bg-background/60 p-2 text-xs leading-relaxed text-muted">
-              <div className="mb-1 text-[11px] font-semibold text-foreground">Synopsis</div>
+            <div className="mt-1.5 rounded-md border border-border bg-surface-2 p-2 text-xs leading-relaxed text-muted">
+              <div className="mb-1 text-[11px] font-semibold text-fg">Synopsis</div>
               {item.overview}
             </div>
           )}
@@ -298,18 +298,18 @@ function Card({
               href={trailerHref(item)}
               target="_blank"
               rel="noreferrer"
-              className="rounded-md border border-card-border px-2 py-0.5 text-[11px] text-candle hover:border-candle/60 hover:bg-candle/10"
+              className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted hover:border-accent-border hover:text-accent"
             >
               Trailer
             </a>
             {pending ? (
-              <span className="animate-pulse rounded-md border border-glow/40 px-2 py-0.5 text-[11px] text-glow">
+              <span className="animate-pulse rounded-md border border-accent-border px-2 py-0.5 text-[11px] text-accent">
                 logging…
               </span>
             ) : (
               <button
                 onClick={onReview}
-                className="rounded-md border border-card-border px-2 py-0.5 text-[11px] text-muted hover:border-glow/60 hover:text-glow"
+                className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted hover:border-accent-border hover:text-accent"
               >
                 Watched it
               </button>
@@ -493,8 +493,8 @@ export default function Watchlist({
                 onClick={() => toggleService(s)}
                 className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
                   excluded.has(s)
-                    ? "border-card-border text-muted opacity-60"
-                    : "border-glow/50 bg-glow/15 text-glow"
+                    ? "border-border text-muted opacity-60"
+                    : "border-accent-border bg-accent-muted text-accent"
                 }`}
               >
                 {s}
@@ -504,12 +504,12 @@ export default function Watchlist({
         </section>
       )}
       <section>
-        <div className="mb-2 text-sm font-medium text-glow">My watchlist</div>
+        <div className="mb-2 text-sm font-medium text-accent">My watchlist</div>
         <div className="mb-2 text-xs text-muted">
           Yours alone — drag to reorder, or use the position picker.
         </div>
         {loaded && user.length === 0 && (
-          <div className="rounded-lg border border-card-border bg-card p-4 text-xs text-muted">
+          <div className="rounded-lg border border-border bg-surface-1 p-4 text-xs text-muted">
             Nothing saved yet — add picks from the suggestions below or from
             recommendations in the chat.
           </div>
@@ -543,7 +543,7 @@ export default function Watchlist({
                     <select
                       value={i + 1}
                       onChange={(e) => move(item.title, Number(e.target.value) - 1)}
-                      className="rounded-md border border-card-border bg-card px-1 py-0.5 text-[11px] text-muted"
+                      className="rounded-md border border-border bg-surface-1 px-1 py-0.5 text-[11px] text-muted"
                       title="Position in the ranking"
                     >
                       {user.map((_, n) => (
@@ -571,14 +571,14 @@ export default function Watchlist({
       </section>
 
       <section>
-        <div className="mb-2 text-sm font-medium text-candle">
+        <div className="mb-2 text-sm font-medium text-fg">
           Louie&apos;s suggestions
         </div>
         <div className="mb-2 text-xs text-muted">
           Reranked as your taste graph grows — grab what looks good.
         </div>
         {loaded && suggestions.length === 0 && (
-          <div className="rounded-lg border border-card-border bg-card p-4 text-xs text-muted">
+          <div className="rounded-lg border border-border bg-surface-1 p-4 text-xs text-muted">
             No suggestions on deck — ask for recommendations in the chat.
           </div>
         )}
@@ -607,7 +607,7 @@ export default function Watchlist({
                         predicted: item.predicted,
                       })
                     }
-                    className="rounded-md border border-glow/50 px-2 py-0.5 text-[11px] text-glow hover:bg-glow/10"
+                    className="rounded-md border border-accent-border px-2 py-0.5 text-[11px] text-accent hover:bg-accent-subtle"
                   >
                     + My watchlist
                   </button>
@@ -638,7 +638,7 @@ export default function Watchlist({
       <section>
         <button
           onClick={() => setShowVetoes((v) => !v)}
-          className="flex w-full items-center gap-1.5 text-left text-sm font-medium text-muted hover:text-foreground"
+          className="flex w-full items-center gap-1.5 text-left text-sm font-medium text-muted hover:text-fg"
         >
           <span className={`transition-transform ${showVetoes ? "rotate-90" : ""}`}>›</span>
           Not interested{notInterested.length > 0 && ` (${notInterested.length})`}
@@ -649,7 +649,7 @@ export default function Watchlist({
               Never suggested again — remove one if you change your mind.
             </div>
             {notInterested.length === 0 ? (
-              <div className="rounded-lg border border-card-border bg-card p-4 text-xs text-muted">
+              <div className="rounded-lg border border-border bg-surface-1 p-4 text-xs text-muted">
                 Nothing here — say &ldquo;don&apos;t suggest X&rdquo; in chat to add one.
               </div>
             ) : (
@@ -657,20 +657,20 @@ export default function Watchlist({
                 {notInterested.map((item) => (
                   <div
                     key={item.title}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-card-border bg-card px-3 py-2 text-xs"
+                    className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface-1 px-3 py-2 text-xs"
                   >
                     <div className="min-w-0">
                       <div className="truncate font-medium">{item.title}</div>
                       {item.note && <div className="truncate text-muted">{item.note}</div>}
                     </div>
                     {removingVeto.has(item.title) ? (
-                      <span className="shrink-0 animate-pulse rounded-md border border-glow/40 px-2 py-0.5 text-[11px] text-glow">
+                      <span className="shrink-0 animate-pulse rounded-md border border-accent-border px-2 py-0.5 text-[11px] text-accent">
                         removing…
                       </span>
                     ) : (
                       <button
                         onClick={() => removeVeto(item.title)}
-                        className="shrink-0 rounded-md border border-card-border px-2 py-0.5 text-[11px] text-muted hover:border-glow/60 hover:text-glow"
+                        className="shrink-0 rounded-md border border-border px-2 py-0.5 text-[11px] text-muted hover:border-accent-border hover:text-accent"
                       >
                         Remove
                       </button>
