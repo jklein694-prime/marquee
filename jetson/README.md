@@ -231,6 +231,15 @@ wikigardener models list|download <id|url>|use <id>|rm <file>
 wikigardener sync             # push/pull the vault to your computer (needs WiFi)
 ```
 
+- **Updating** (one command, e.g. from Termius on your phone): `sudo wikigardener
+  update` pulls the latest `main` from GitHub, refreshes the device code
+  (gardener, audit, installers), and rebuilds the app if it changed. It turns
+  WiFi on and back off, falls back to public DNS if lookups fail, and repairs a
+  checkout with no `origin`. It runs as a background unit, so a dropped SSH
+  session doesn't kill the build — reconnect and run `sudo wikigardener update
+  log`. `--force` rebuilds even when nothing changed. Repo/branch override:
+  `APP_REPO=` / `APP_BRANCH=` in `/etc/wikigardener/gardener.conf`.
+
 - **Dashboard**: `http://<nano-ip>:8088`, password from
   `/etc/wikigardener/dashboard.token`. It's the fastest way to watch tok/s, the
   queue, commits, and logs, and to download/switch models or edit prompts. It

@@ -43,8 +43,13 @@ EOF
 fi
 
 echo "== fetching the app"
-if [ -d "$APP_DIR/.git" ]; then
-  git -C "$APP_DIR" pull --ff-only || echo "   (pull failed — building what's here)"
+if [ "${WG_SKIP_PULL:-}" = 1 ]; then
+  echo "   (checkout already updated by wikigardener update)"
+elif [ -d "$APP_DIR/.git" ]; then
+  git -C "$APP_DIR" pull --ff-only || {
+    echo "FATAL: git pull failed — run 'sudo wikigardener update' instead," >&2
+    echo "       which repairs a checkout with no origin/upstream." >&2
+    exit 1; }
 else
   git clone --depth 1 "$REPO_URL" "$APP_DIR"
 fi
@@ -122,7 +127,7 @@ cat <<EOF
 == app installed ==
   open:      http://${IP:-<nano-ip>}:3000     (graph view + wiki + chat)
   status:    systemctl status wikigardener-app
-  update:    re-run this script during an online window (pulls + rebuilds)
+  update:    sudo wikigardener update   (pulls + rebuilds; safe to disconnect)
   NOTE: the vault is mounted read-write (chat writes pages directly via the
   page-writer subagent); the gardener also writes on its own timer. Both go
   through git, which serializes commits itself — a rare overlap fails one
