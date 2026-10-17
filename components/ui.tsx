@@ -1,10 +1,11 @@
 "use client";
 
-// The four primitives every panel is built from (PLAN.md §3). Sizes are
+// The primitives every panel is built from (PLAN.md §3). Sizes are
 // mobile-first: 44px hit areas on touch, denser on md+ where a pointer is
 // assumed. No panel should carry its own bespoke button class strings.
 
 import { useEffect, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { CloseIcon } from "./icons";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "filled";
 type Size = "md" | "sm";
@@ -39,7 +40,7 @@ export function Button({
   );
 }
 
-/** A 44px hit area around a small glyph; always needs aria-label. */
+/** A 44px hit area around a small glyph; always needs a label. */
 export function IconButton({
   label,
   className = "",
@@ -69,7 +70,7 @@ export function Chip({
     <button
       type="button"
       aria-pressed={selected}
-      className={`inline-flex min-h-11 shrink-0 items-center rounded-full border px-3 text-sm transition-colors md:min-h-8 md:text-xs ${
+      className={`inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-full border px-3.5 text-sm transition-colors md:min-h-8 md:px-3 md:text-xs ${
         selected
           ? "border-accent-border bg-accent-muted text-accent"
           : "border-border text-muted hover:border-border-strong hover:text-fg"
@@ -80,9 +81,48 @@ export function Chip({
 }
 
 /**
- * Detail surface: a bottom sheet on phones (half height, scrolls inside), a
- * floating card pinned top-right on md+. Escape closes; the backdrop is
- * tap-to-close on phones only (desktop keeps the graph interactive).
+ * 1–10 rating: a 5×2 grid of 44px cells on phones (ten across never fit a
+ * card at 390px), one dense row on md+. Shared by the watchlist review form,
+ * Quick Rate, and the chat checklist widget.
+ */
+export function RatingGrid({
+  value,
+  onChange,
+  disabled = false,
+  label = "Rating out of 10",
+}: {
+  value: number | null;
+  onChange: (n: number) => void;
+  disabled?: boolean;
+  label?: string;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="grid grid-cols-5 gap-1.5 md:flex md:gap-1">
+      {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+        <button
+          key={n}
+          type="button"
+          role="radio"
+          aria-checked={value === n}
+          disabled={disabled}
+          onClick={() => onChange(n)}
+          className={`h-11 rounded-md text-sm transition-colors disabled:opacity-50 md:h-8 md:w-8 md:text-xs ${
+            value === n
+              ? "bg-accent font-semibold text-accent-text"
+              : "border border-border text-muted hover:border-accent-border hover:text-fg"
+          }`}
+        >
+          {n}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Detail surface: a bottom sheet on phones (scrolls inside, backdrop closes
+ * it), a floating card pinned top-right on md+ (the graph stays interactive;
+ * the caller closes it on an outside click). Escape closes either.
  */
 export function Sheet({
   open,
@@ -111,21 +151,20 @@ export function Sheet({
       <div className="absolute inset-0 z-10 md:hidden" onClick={onClose} aria-hidden />
       <section
         role="dialog"
-        aria-label={typeof title === "string" ? title : undefined}
-        className={`sheet-up absolute inset-x-0 bottom-0 z-20 flex max-h-[60%] flex-col rounded-t-2xl border-t border-border bg-surface-1/95 shadow-2xl backdrop-blur-sm md:inset-auto md:right-3 md:top-3 md:max-h-[calc(100%-1.5rem)] md:w-80 md:rounded-lg md:border ${className}`}
+        aria-label={typeof title === "string" ? title : "Details"}
+        data-sheet
+        className={`sheet-up absolute inset-x-0 bottom-0 z-20 flex max-h-[62%] flex-col rounded-t-2xl border-t border-border bg-surface-1/95 shadow-2xl backdrop-blur-sm md:inset-auto md:right-3 md:top-3 md:max-h-[calc(100%-1.5rem)] md:w-80 md:rounded-lg md:border ${className}`}
       >
-        <header className="flex items-start justify-between gap-2 px-4 pt-3 pb-2">
-          <div className="mx-auto mb-2 h-1 w-10 shrink-0 rounded-full bg-border-strong md:hidden" aria-hidden />
-        </header>
-        <div className="-mt-6 flex items-start justify-between gap-2 px-4 pb-2 md:mt-0">
-          <div className="min-w-0 text-base font-medium text-fg md:text-sm">{title}</div>
-          <IconButton label="Close" onClick={onClose} className="-mr-2 -mt-2">
-            <span aria-hidden className="text-lg leading-none">
-              ×
-            </span>
+        <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-border-strong md:hidden" aria-hidden />
+        <div className="flex items-start justify-between gap-2 pl-4 pr-1 pt-2">
+          <div className="min-w-0 flex-1 py-2 text-base font-medium leading-snug text-fg md:text-sm">{title}</div>
+          <IconButton label="Close" onClick={onClose}>
+            <CloseIcon size={18} />
           </IconButton>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-sm">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-sm">
+          {children}
+        </div>
       </section>
     </>
   );

@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import { WIKILINK } from "@/lib/wikilink";
 import { OptionPicker, MovieCards, MovieChecklist, OptionsData, RecsData, ChecklistData } from "./Widgets";
 import { clearChat, followTurn, loadChat, saveChat, startTurn, stopTurn, type ClientTurnEvent } from "@/lib/turnClient";
+import { Button } from "./ui";
 
 export function Markdown({ text }: { text: string }) {
   return (
@@ -36,9 +37,7 @@ export function Markdown({ text }: { text: string }) {
             <table className="w-full border-collapse text-xs" {...p} />
           </div>
         ),
-        th: (p) => (
-          <th className="border-b border-border px-2 py-1 text-left font-semibold text-fg" {...p} />
-        ),
+        th: (p) => <th className="border-b border-border px-2 py-1 text-left font-semibold text-fg" {...p} />,
         td: (p) => <td className="border-b border-border/60 px-2 py-1 align-top" {...p} />,
       }}
     >
@@ -86,7 +85,8 @@ function activityLabel(t: { kind: string; sub?: boolean; label: string }): strin
   return "working…";
 }
 
-// rotated in the busy bar while the expert thinks
+// rotated in the busy bar while the expert thinks (desktop only — a phone
+// has no room for it)
 const TIPS = [
   "log what you watched from the Watchlist tab — even mid-chat, it queues up",
   "hit Not now on a suggestion to shelve it for a couple of weeks",
@@ -105,7 +105,10 @@ function LouieHero() {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/louie.svg").then((r) => r.text()).then(setSvg).catch(() => {});
+    fetch("/louie.svg")
+      .then((r) => r.text())
+      .then(setSvg)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -115,8 +118,12 @@ function LouieHero() {
 
     const polys = [...svgEl.querySelectorAll("polygon")].map((p) => {
       const nums = (p.getAttribute("points") ?? "").split(/[ ,]/).map(Number);
-      let cx = 0, cy = 0;
-      for (let i = 0; i < 6; i += 2) { cx += nums[i]; cy += nums[i + 1]; }
+      let cx = 0,
+        cy = 0;
+      for (let i = 0; i < 6; i += 2) {
+        cx += nums[i];
+        cy += nums[i + 1];
+      }
       const base = Number((p.getAttribute("fill") ?? "").match(/\d+/)?.[0] ?? 0);
       return { el: p, cx: cx / 3, cy: cy / 3, base };
     });
@@ -173,9 +180,11 @@ function LouieHero() {
   }, [svg]);
 
   return (
+    // capped by viewport height so the welcome card and input stay on the
+    // first screen of a phone
     <div
       ref={ref}
-      className="mx-auto mb-4 w-64"
+      className="mx-auto mb-3 w-[min(16rem,28dvh)] [&>svg]:h-auto [&>svg]:w-full"
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );
@@ -186,12 +195,14 @@ export default function ChatPane({
   onTrace,
   onOpenHelp,
   onWatchGraph,
+  onInputFocusChange,
   sendRef,
 }: {
   onTurnEnd: () => void;
   onTrace: (t: TraceEntry) => void;
   onOpenHelp?: () => void;
   onWatchGraph?: () => void;
+  onInputFocusChange?: (focused: boolean) => void;
   sendRef?: MutableRefObject<ChatSend>;
 }) {
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -326,8 +337,7 @@ export default function ChatPane({
           // live generation status (thinking…, preparing Edit…) — fills the
           // long silent stretches between trace lines. Chat lane only: the
           // busy strip belongs to the chat; background logs stay invisible.
-          if (!silent)
-            setActivity(ev.label ? `${ev.label}${ev.detail ? ` ${ev.detail}` : ""}` : "working…");
+          if (!silent) setActivity(ev.label ? `${ev.label}${ev.detail ? ` ${ev.detail}` : ""}` : "working…");
         } else if (ev.type === "text") {
           setMessages((m) => {
             const next = [...m];
@@ -346,9 +356,7 @@ export default function ChatPane({
             // drop duplicate widget re-calls within the same turn
             const dup = m.some(
               (msg) =>
-                msg.role === "widget" &&
-                msg.widget === ev.widget &&
-                JSON.stringify(msg.data) === JSON.stringify(ev.data)
+                msg.role === "widget" && msg.widget === ev.widget && JSON.stringify(msg.data) === JSON.stringify(ev.data)
             );
             if (dup) return m;
             const w: Msg =
@@ -441,44 +449,30 @@ export default function ChatPane({
 
   return (
     <>
-      <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4 md:px-5">
         {messages.length > 0 && !busy && (
           <div className="flex justify-end">
-            <button
-              onClick={newChat}
-              className="cursor-pointer rounded border border-border px-2 py-0.5 text-[11px] text-muted hover:border-accent-border hover:text-accent"
-            >
+            <Button variant="secondary" size="sm" onClick={newChat}>
               New chat
-            </button>
+            </Button>
           </div>
         )}
         {messages.length === 0 && (
-          <div className="mx-auto mt-10 max-w-sm text-center">
+          <div className="mx-auto mt-4 max-w-sm text-center md:mt-10">
             <LouieHero />
-            <div className="text-sm text-muted">
-              Ask for a recommendation, or tell me what you watched.
-            </div>
+            <div className="text-sm text-muted">Ask for a recommendation, or tell me what you watched.</div>
             <button
-              onClick={() =>
-                send("Take me through a guided session to find something to watch.")
-              }
-              className="mt-6 w-full cursor-pointer rounded-lg border border-accent-border bg-surface-1 px-5 py-4 text-left transition-colors hover:border-accent hover:bg-accent-subtle"
+              onClick={() => send("Take me through a guided session to find something to watch.")}
+              className="mt-5 w-full rounded-lg border border-accent-border bg-surface-1 px-5 py-4 text-left transition-colors hover:border-accent hover:bg-accent-subtle"
             >
-              <div className="text-sm font-medium text-accent">Find me something to watch</div>
-              <div className="mt-1 text-xs text-muted">
-                A few quick questions, then picks tuned to your taste
-              </div>
+              <div className="text-base font-medium text-accent md:text-sm">Find me something to watch</div>
+              <div className="mt-1 text-sm text-muted md:text-xs">A few quick questions, then picks tuned to your taste</div>
             </button>
-            <div className="mt-4 text-xs text-muted opacity-70">
-              or just type — &ldquo;I watched Heat, loved it&rdquo;
-            </div>
+            <div className="mt-3 text-xs text-muted">or just type — &ldquo;I watched Heat, loved it&rdquo;</div>
             {onOpenHelp && (
-              <button
-                onClick={onOpenHelp}
-                className="mt-5 text-xs text-muted underline decoration-dotted underline-offset-4 hover:text-accent"
-              >
+              <Button variant="ghost" size="sm" className="mt-2 underline decoration-dotted underline-offset-4" onClick={onOpenHelp}>
                 New here? Start with Help
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -493,12 +487,18 @@ export default function ChatPane({
             );
           if (msg.role === "user")
             return (
-              <div key={i} className="ml-12 break-words rounded-lg border border-accent-border bg-accent-subtle px-3.5 py-2.5 text-sm">
+              <div
+                key={i}
+                className="ml-8 break-words rounded-lg border border-accent-border bg-accent-subtle px-3.5 py-2.5 text-[15px] leading-relaxed md:ml-12 md:text-sm"
+              >
                 {msg.text}
               </div>
             );
           return (
-            <div key={i} className="mr-6 break-words rounded-lg border border-border bg-surface-1 px-3.5 py-2.5 text-sm leading-relaxed">
+            <div
+              key={i}
+              className="mr-2 break-words rounded-lg border border-border bg-surface-1 px-3.5 py-2.5 text-[15px] leading-relaxed md:mr-6 md:text-sm"
+            >
               {msg.text ? <Markdown text={msg.text} /> : <span className="animate-pulse text-muted">thinking…</span>}
             </div>
           );
@@ -506,35 +506,31 @@ export default function ChatPane({
         <div ref={bottomRef} />
       </div>
       {busy && (
-        <div className="flex items-center gap-2.5 border-t border-border bg-surface-1 px-5 py-2">
-          <span className="relative flex h-2.5 w-2.5">
+        <div className="flex items-center gap-2 border-t border-border bg-surface-1 px-3 py-1.5 md:px-5">
+          <span className="relative flex h-2.5 w-2.5 shrink-0">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
             <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent" />
           </span>
-          <span className="text-xs text-accent">{activity}</span>
-          <button
+          <span className="min-w-0 flex-1 truncate text-xs text-accent">{activity}</span>
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => {
               if (currentTurnRef.current) void stopTurn(currentTurnRef.current);
             }}
-            className="cursor-pointer rounded border border-border px-2 py-0.5 text-[11px] text-muted hover:border-accent-border hover:text-accent"
           >
             Stop
-          </button>
+          </Button>
           {onWatchGraph && (
-            <button
-              onClick={onWatchGraph}
-              className="cursor-pointer rounded border border-border px-2 py-0.5 text-[11px] text-muted hover:border-accent-border hover:text-accent"
-            >
+            <Button variant="secondary" size="sm" onClick={onWatchGraph}>
               Watch the graph
-            </button>
+            </Button>
           )}
-          <span className="ml-auto min-w-0 truncate pl-3 text-[11px] text-muted">
-            tip: {TIPS[tipIdx]}
-          </span>
+          <span className="hidden min-w-0 max-w-[40%] truncate pl-3 text-xs text-muted lg:inline">tip: {TIPS[tipIdx]}</span>
         </div>
       )}
       <form
-        className="flex gap-2 border-t border-border bg-surface-1 p-4"
+        className="flex gap-2 border-t border-border bg-surface-1 p-3 md:p-4"
         onSubmit={(e) => {
           e.preventDefault();
           const t = input;
@@ -545,17 +541,16 @@ export default function ChatPane({
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onFocus={() => onInputFocusChange?.(true)}
+          onBlur={() => onInputFocusChange?.(false)}
           placeholder={busy ? "the expert is working — messages queue up…" : "Talk movies & shows…"}
+          aria-label="Message"
           // text-base (16px) on mobile stops iOS from auto-zooming on focus; desktop keeps 14px
-          className="flex-1 rounded-md border border-border-strong bg-surface-2 px-3 py-2 text-base outline-none placeholder:text-muted focus:border-accent-border disabled:opacity-60 md:text-sm"
+          className="min-h-11 min-w-0 flex-1 rounded-md border border-border-strong bg-surface-2 px-3 text-base outline-none placeholder:text-muted focus:border-accent-border md:text-sm"
         />
-        <button
-          type="submit"
-          disabled={!input.trim()}
-          className="rounded-md border border-accent-border px-4 py-2 text-sm text-accent hover:bg-accent-subtle disabled:opacity-40"
-        >
+        <Button type="submit" variant="primary" size="md" disabled={!input.trim()}>
           Send
-        </button>
+        </Button>
       </form>
     </>
   );

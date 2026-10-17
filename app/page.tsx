@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ChatPane, { ChatSend, TraceEntry } from "@/components/ChatPane";
 import PushToggle from "@/components/PushToggle";
 import GraphView from "@/components/GraphView";
@@ -8,8 +8,9 @@ import Watchlist from "@/components/Watchlist";
 import QuickRate from "@/components/QuickRate";
 import PredictPanel from "@/components/PredictPanel";
 import HelpPanel from "@/components/HelpPanel";
+import { Button, IconButton } from "@/components/ui";
+import { ChatIcon, ChevronLeftIcon, CloseIcon, DotsIcon, GraphIcon, ListIcon, StarIcon } from "@/components/icons";
 import { emitThinking, traceToThinking } from "@/lib/liveThinking";
-
 
 const KIND_STYLE: Record<TraceEntry["kind"], string> = {
   init: "text-muted",
@@ -19,35 +20,41 @@ const KIND_STYLE: Record<TraceEntry["kind"], string> = {
   model: "text-muted",
 };
 
-function Booth({ entries }: { entries: TraceEntry[] }) {
+function Booth({ entries, model }: { entries: TraceEntry[]; model: string | null }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "auto" });
   }, [entries]);
 
   return (
-    <div className="h-full overflow-y-auto px-5 py-4 font-mono text-xs leading-relaxed">
-      {entries.length === 0 && (
-        <div className="mt-16 text-center text-muted">
-          Nothing on the reel yet — every tool call, vault write, and subagent
-          dispatch shows up here as the expert works.
-        </div>
-      )}
-      {entries.map((t, i) => (
-        <div key={i} className="flex gap-2 border-b border-border/60 py-1.5">
-          <span className="shrink-0 text-muted">{t.at}</span>
-          <span
-            className={`shrink-0 rounded px-1 ${
-              t.sub ? "bg-info-subtle text-info" : "bg-accent-muted text-accent"
-            }`}
-          >
-            {t.sub ? "sub" : "main"}
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2 text-xs text-muted">
+        <span>Live activity log</span>
+        {model && (
+          <span className="truncate font-mono" title="model the API served for the last reply">
+            {model}
           </span>
-          <span className={`shrink-0 font-semibold ${KIND_STYLE[t.kind]}`}>{t.label}</span>
-          {t.detail && <span className="break-all text-muted">{t.detail}</span>}
-        </div>
-      ))}
-      <div ref={bottomRef} />
+        )}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 font-mono text-xs leading-relaxed">
+        {entries.length === 0 && (
+          <div className="mt-16 text-center text-muted">
+            Nothing on the reel yet — every tool call, vault write, and subagent dispatch shows up here as the
+            expert works.
+          </div>
+        )}
+        {entries.map((t, i) => (
+          <div key={i} className="flex gap-2 border-b border-border/60 py-1.5">
+            <span className="shrink-0 text-muted">{t.at}</span>
+            <span className={`shrink-0 rounded px-1 ${t.sub ? "bg-info-subtle text-info" : "bg-accent-muted text-accent"}`}>
+              {t.sub ? "sub" : "main"}
+            </span>
+            <span className={`shrink-0 font-semibold ${KIND_STYLE[t.kind]}`}>{t.label}</span>
+            {t.detail && <span className="break-all text-muted">{t.detail}</span>}
+          </div>
+        ))}
+        <div ref={bottomRef} />
+      </div>
     </div>
   );
 }
@@ -75,14 +82,17 @@ const PANEL_TITLE: Record<Exclude<Panel, null>, string> = {
   more: "More",
 };
 
+// panels reached through More: their title bar goes back to More, not Close
+const SECONDARY = new Set<Panel>(["predict", "booth", "help"]);
+
 // mobile bottom bar — four primary destinations plus More (Booth/Help behind it)
-const BOTTOM_TABS = [
-  [null, "Chat"],
-  ["graph", "Graph"],
-  ["watchlist", "List"],
-  ["rate", "Rate"],
-  ["more", "More"],
-] as const;
+const BOTTOM_TABS: [Panel, string, (p: { size?: number }) => React.ReactNode][] = [
+  [null, "Chat", ChatIcon],
+  ["graph", "Graph", GraphIcon],
+  ["watchlist", "List", ListIcon],
+  ["rate", "Rate", StarIcon],
+  ["more", "More", DotsIcon],
+];
 
 // the mobile "More" view: secondary panels as big tappable rows — no popover /
 // outside-click machinery, it's just another full-screen panel.
@@ -100,8 +110,8 @@ function MorePanel({ onPick }: { onPick: (p: Panel) => void }) {
           onClick={() => onPick(id)}
           className="w-full rounded-lg border border-border bg-surface-1 p-4 text-left transition-colors hover:border-accent-border"
         >
-          <div className="text-sm font-medium text-accent">{label}</div>
-          <div className="mt-1 text-xs text-muted">{desc}</div>
+          <div className="text-base font-medium text-fg">{label}</div>
+          <div className="mt-1 text-sm text-muted">{desc}</div>
         </button>
       ))}
       <PushToggle />
@@ -115,12 +125,32 @@ export default function Home() {
   const [graphMode, setGraphMode] = useState<"2d" | "3d">("2d");
   const [trace, setTrace] = useState<TraceEntry[]>([]);
   const [model, setModel] = useState<string | null>(null);
+  // the phone keyboard is up: hide the bottom nav so it doesn't stack on it
+  const [chatFocused, setChatFocused] = useState(false);
   const chatSend = useRef<ChatSend>(() => false);
+
+  const onTurnEnd = useCallback(() => setGraphVersion((v) => v + 1), []);
+  const onTrace = useCallback((t: TraceEntry) => {
+    setTrace((prev) => [...prev, t]);
+    if (t.kind === "model") setModel(t.label);
+    // live 3D show: map wiki-touching tool calls to graph activations
+    const ev = traceToThinking(t);
+    if (ev) emitThinking(ev);
+  }, []);
+  const onOpenHelp = useCallback(() => setPanel("help"), []);
+  const onWatchGraph = useCallback(() => {
+    setPanel("graph");
+    // 3D is a battery cost on a phone: the live show runs in 2D there
+    if (window.matchMedia("(min-width: 768px)").matches) setGraphMode("3d");
+  }, []);
+  const chat = useCallback<ChatSend>((t, onDone, opts) => chatSend.current(t, onDone, opts), []);
+
+  const showNav = !(panel === null && chatFocused);
 
   return (
     // h-dvh (not h-screen) tracks the dynamic viewport so the mobile URL bar
     // never hides the chat input. Column: content row on top, bottom nav below.
-    <main className="flex h-dvh flex-col overflow-hidden">
+    <main className="flex h-dvh flex-col overflow-hidden pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       <div className="flex min-h-0 flex-1">
         <section
           // desktop: chat is full-width, or a 46% left pane when a panel is open.
@@ -128,156 +158,107 @@ export default function Home() {
           // min-w-0: without it a flex item won't shrink below its content's
           // intrinsic width, so the pane overflows the phone viewport.
           className={`min-w-0 flex-col ${
-            panel
-              ? "hidden md:flex md:w-[46%] md:min-w-[380px] md:border-r md:border-border"
-              : "flex flex-1"
+            panel ? "hidden md:flex md:w-[46%] md:min-w-[380px] md:border-r md:border-border" : "flex flex-1"
           }`}
         >
-          <header className="flex items-center gap-3 border-b border-border px-5 py-3">
-            { }
-            <img src="/icon.png" alt="Louie" className="h-8 w-8 louie-growl" />
-            <h1 className="text-lg font-semibold tracking-wide text-accent">
-              Marquee
-            </h1>
-            <span className="flex min-w-0 flex-col leading-tight">
-              <span className="text-xs text-muted">your movie & TV expert</span>
-              {model && (
-                <span
-                  title="model the API served for the last reply"
-                  className="truncate font-mono text-[10px] text-faint"
-                >
-                  {model}
-                </span>
-              )}
-            </span>
+          <header className="flex h-12 items-center gap-3 border-b border-border px-4 md:h-auto md:py-3">
+            <img src="/icon.png" alt="" className="h-8 w-8 louie-growl" />
+            <h1 className="text-lg font-semibold tracking-wide text-accent">Marquee</h1>
+            <span className="hidden text-xs text-muted md:inline">your movie &amp; TV expert</span>
             {!panel && (
               <span className="ml-auto hidden gap-1 md:flex">
                 {TABS.map(([id, label]) => (
-                  <button
-                    key={id}
-                    onClick={() => setPanel(id)}
-                    className="rounded-md px-3 py-1 text-xs text-muted transition-colors hover:bg-accent-subtle hover:text-accent"
-                  >
+                  <Button key={id} variant="ghost" size="sm" onClick={() => setPanel(id)}>
                     {label}
-                  </button>
+                  </Button>
                 ))}
               </span>
             )}
           </header>
           <ChatPane
-            onTurnEnd={() => setGraphVersion((v) => v + 1)}
-            onTrace={(t) => {
-              setTrace((prev) => [...prev, t]);
-              if (t.kind === "model") setModel(t.label);
-              // live 3D show: map wiki-touching tool calls to graph activations
-              const ev = traceToThinking(t);
-              if (ev) emitThinking(ev);
-            }}
-            onOpenHelp={() => setPanel("help")}
-            onWatchGraph={() => {
-              setPanel("graph");
-              setGraphMode("3d");
-            }}
+            onTurnEnd={onTurnEnd}
+            onTrace={onTrace}
+            onOpenHelp={onOpenHelp}
+            onWatchGraph={onWatchGraph}
+            onInputFocusChange={setChatFocused}
             sendRef={chatSend}
           />
         </section>
         {/* stays mounted even when closed so Screen Test's panel — and any
             screening it is running — survives tab switches and Close */}
-        <section
-          className={`relative min-w-0 flex-1 flex-col ${panel ? "flex" : "hidden"}`}
-        >
-            {/* desktop tab strip */}
-            <div className="hidden items-center gap-1 border-b border-border px-4 py-2 md:flex">
-              {TABS.map(([id, label]) => (
-                <button
-                  key={id}
-                  onClick={() => setPanel(id)}
-                  className={`rounded-md px-3 py-1 text-xs transition-colors ${
-                    panel === id
-                      ? "bg-accent-muted text-accent"
-                      : "text-muted hover:text-fg"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-              {panel === "graph" && (
-                <span className="ml-auto text-xs text-muted">
-                  <span className="text-accent">liked</span> ·{" "}
-                  <span className="text-danger">disliked</span> ·{" "}
-                  <span className="text-fg">genres</span> ·{" "}
-                  <span className="opacity-50 text-accent">watchlist</span>
-                </span>
-              )}
-              <button
-                onClick={() => setPanel(null)}
-                className={`rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-accent-subtle hover:text-accent ${
-                  panel === "graph" ? "" : "ml-auto"
-                }`}
-                title="Close panel"
+        <section className={`relative min-w-0 flex-1 flex-col ${panel ? "flex" : "hidden"}`}>
+          {/* desktop tab strip */}
+          <div className="hidden items-center gap-1 border-b border-border px-3 py-1.5 md:flex">
+            {TABS.map(([id, label]) => (
+              <Button
+                key={id}
+                variant="ghost"
+                size="sm"
+                aria-current={panel === id ? "page" : undefined}
+                className={panel === id ? "bg-accent-muted text-accent hover:text-accent" : ""}
+                onClick={() => setPanel(id)}
               >
-                Close
-              </button>
+                {label}
+              </Button>
+            ))}
+            <IconButton label="Close panel" className="ml-auto" onClick={() => setPanel(null)}>
+              <CloseIcon size={18} />
+            </IconButton>
+          </div>
+          {/* mobile title bar — bottom nav handles switching */}
+          <div className="flex h-12 items-center gap-1 border-b border-border px-1 md:hidden">
+            {SECONDARY.has(panel) ? (
+              <IconButton label="Back to More" onClick={() => setPanel("more")}>
+                <ChevronLeftIcon />
+              </IconButton>
+            ) : (
+              <span className="w-2" />
+            )}
+            <span className="min-w-0 flex-1 truncate px-1 text-base font-medium text-fg">
+              {panel && PANEL_TITLE[panel]}
+            </span>
+            <IconButton label="Close panel" onClick={() => setPanel(null)}>
+              <CloseIcon size={18} />
+            </IconButton>
+          </div>
+          <div className="min-h-0 flex-1">
+            <div className={panel === "predict" ? "h-full" : "hidden"}>
+              <PredictPanel />
             </div>
-            {/* mobile slim title bar — bottom nav handles switching */}
-            <div className="flex items-center justify-between border-b border-border px-4 py-3 md:hidden">
-              <span className="text-sm font-medium text-accent">
-                {panel && PANEL_TITLE[panel]}
-              </span>
-              {panel === "predict" || panel === "booth" || panel === "help" ? (
-                <button
-                  onClick={() => setPanel("more")}
-                  className="text-xs text-muted transition-colors hover:text-accent"
-                >
-                  ‹ More
-                </button>
-              ) : (
-                <button
-                  onClick={() => setPanel(null)}
-                  className="text-xs text-muted transition-colors hover:text-accent"
-                >
-                  Close
-                </button>
-              )}
-            </div>
-            <div className="min-h-0 flex-1">
-              <div className={panel === "predict" ? "h-full" : "hidden"}>
-                <PredictPanel />
-              </div>
-              {panel === "graph" ? (
-                <GraphView version={graphVersion} mode={graphMode} onModeChange={setGraphMode} />
-              ) : panel === "watchlist" ? (
-                <Watchlist
-                  version={graphVersion}
-                  onChat={(t, onDone, opts) => chatSend.current(t, onDone, opts)}
-                />
-              ) : panel === "rate" ? (
-                <QuickRate onChat={(t, onDone, opts) => chatSend.current(t, onDone, opts)} />
-              ) : panel === "help" ? (
-                <HelpPanel />
-              ) : panel === "more" ? (
-                <MorePanel onPick={setPanel} />
-              ) : panel === "booth" ? (
-                <Booth entries={trace} />
-              ) : null}
-            </div>
-          </section>
+            {panel === "graph" ? (
+              <GraphView version={graphVersion} mode={graphMode} onModeChange={setGraphMode} />
+            ) : panel === "watchlist" ? (
+              <Watchlist version={graphVersion} onChat={chat} />
+            ) : panel === "rate" ? (
+              <QuickRate onChat={chat} />
+            ) : panel === "help" ? (
+              <HelpPanel />
+            ) : panel === "more" ? (
+              <MorePanel onPick={setPanel} />
+            ) : panel === "booth" ? (
+              <Booth entries={trace} model={model} />
+            ) : null}
+          </div>
+        </section>
       </div>
       {/* mobile-only bottom navigation; pads around the home-indicator safe area */}
-      <nav className="flex border-t border-border pb-[env(safe-area-inset-bottom)] md:hidden">
-        {BOTTOM_TABS.map(([id, label]) => {
-          const active =
-            id === "more"
-              ? panel === "more" || panel === "predict" || panel === "booth" || panel === "help"
-              : panel === id;
+      <nav
+        aria-label="Sections"
+        className={`border-t border-border bg-surface-0 pb-[env(safe-area-inset-bottom)] md:hidden ${showNav ? "flex" : "hidden"}`}
+      >
+        {BOTTOM_TABS.map(([id, label, Icon]) => {
+          const active = id === "more" ? panel === "more" || SECONDARY.has(panel) : panel === id;
           return (
             <button
               key={label}
               onClick={() => setPanel(id)}
-              className={`flex flex-1 items-center justify-center py-3.5 text-xs transition-colors ${
+              aria-current={active ? "page" : undefined}
+              className={`relative flex h-14 flex-1 flex-col items-center justify-center gap-0.5 text-xs transition-colors ${
                 active ? "text-accent" : "text-muted"
               }`}
             >
+              {active && <span aria-hidden className="absolute inset-x-6 top-0 h-0.5 rounded-b bg-accent" />}
+              <Icon size={22} />
               {label}
             </button>
           );

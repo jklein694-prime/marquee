@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { GraphNode, GraphLink } from "@/lib/vault";
 import { Markdown } from "./ChatPane";
@@ -16,6 +16,8 @@ import {
 } from "./useHeatEngine";
 import { onThinking, type ThinkingEvent } from "@/lib/liveThinking";
 import { graphPalette } from "@/lib/theme";
+import { Chip, IconButton, Sheet } from "./ui";
+import { InfoIcon } from "./icons";
 
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
   ssr: false,
@@ -202,14 +204,19 @@ export default function GraphView({
       ? wiki.page
       : "loading";
 
+  // desktop: a click anywhere outside the graph closes the detail card.
+  // pointerdown, not mousedown — iOS never synthesizes mouse events on plain
+  // elements. On phones the Sheet's own backdrop handles closing.
   useEffect(() => {
     if (!selected) return;
-    function handleClickOutside(e: MouseEvent) {
+    function handleOutside(e: PointerEvent) {
       if (!containerRef.current?.contains(e.target as Node)) setSelected(null);
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("pointerdown", handleOutside);
+    return () => document.removeEventListener("pointerdown", handleOutside);
   }, [selected]);
+  const [legendOpen, setLegendOpen] = useState(false);
+  const closeSelected = useCallback(() => setSelected(null), []);
 
   const neighborIds = useMemo(() => {
     if (!selected) return null;
@@ -324,22 +331,50 @@ export default function GraphView({
   return (
     <div ref={containerRef} className="relative h-full w-full">
       {data.nodes.length > 0 && (
-        <div className="absolute left-3 top-3 z-10 flex gap-1 rounded-md border border-border bg-surface-1/90 p-1 text-xs backdrop-blur-sm">
+        <div className="absolute left-2 top-2 z-10 flex items-center gap-1 rounded-lg border border-border bg-surface-1/90 p-1 backdrop-blur-sm md:left-3 md:top-3">
           {(["2d", "3d"] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => onModeChange(m)}
-              className={`rounded px-2 py-0.5 ${
-                mode === m ? "bg-accent-muted text-accent" : "text-muted hover:text-fg"
-              }`}
-            >
+            <Chip key={m} selected={mode === m} onClick={() => onModeChange(m)} className="px-3">
               {m.toUpperCase()}
-            </button>
+            </Chip>
           ))}
+          <IconButton label="Legend" aria-expanded={legendOpen} onClick={() => setLegendOpen((v) => !v)}>
+            <InfoIcon />
+          </IconButton>
           {liveLabel && (
-            <span className="flex items-center gap-1.5 px-2 text-muted">
+            <span className="hidden items-center gap-1.5 px-2 text-xs text-muted sm:flex">
               <span className="animate-pulse text-accent">●</span> {liveLabel}
             </span>
+          )}
+        </div>
+      )}
+      {legendOpen && (
+        <div className="absolute left-2 top-16 z-10 w-56 rounded-lg border border-border bg-surface-1/95 p-3 text-sm backdrop-blur-sm md:left-3 md:text-xs">
+          <div className="mb-1.5 font-medium text-fg">What the colors mean</div>
+          {(
+            [
+              ["loved", "loved"],
+              ["liked", "liked"],
+              ["meh", "meh"],
+              ["disliked", "disliked"],
+              ["unrated", "seen, no verdict yet"],
+              ["category", "genre, person, theme…"],
+              ["watchlist", "on your watchlist"],
+              ["taste", "a taste note"],
+            ] as const
+          ).map(([k, label]) => (
+            <div key={k} className="flex items-center gap-2 py-0.5 text-muted">
+              <span
+                aria-hidden
+                className="inline-block h-3 w-3 shrink-0 rounded-full"
+                style={{ backgroundColor: graphPalette()[k] }}
+              />
+              {label}
+            </div>
+          ))}
+          {liveLabel && (
+            <div className="mt-1.5 flex items-center gap-1.5 text-muted sm:hidden">
+              <span className="animate-pulse text-accent">●</span> {liveLabel}
+            </div>
           )}
         </div>
       )}
@@ -431,21 +466,13 @@ export default function GraphView({
         />
       )}
       <SpotCard spot={engine.spot} />
-      {selected && (
-        <div className="absolute right-3 top-3 z-10 max-h-[calc(100%-1.5rem)] w-80 max-w-[85%] overflow-y-auto rounded-lg border border-border bg-surface-1/95 backdrop-blur-sm">
-          <div className="sticky top-0 z-10 flex items-start justify-between gap-2 rounded-t-lg bg-surface-1/95 p-4 pb-2 backdrop-blur-sm">
-            <div className="text-sm font-medium text-accent">
-              {typeof wikiPage === "object" && wikiPage ? wikiPage.title : selected.label}
-            </div>
-            <button
-              onClick={() => setSelected(null)}
-              className="text-muted hover:text-fg"
-              aria-label="Close"
-            >
-              ×
-            </button>
-          </div>
-          <div className="break-words px-4 pb-4 text-sm">
+      <Sheet
+        open={!!selected}
+        onClose={closeSelected}
+        title={selected ? (typeof wikiPage === "object" && wikiPage ? wikiPage.title : selected.label) : ""}
+      >
+        {selected && (
+          <div className="break-words pb-2">
             {wikiPage === "loading" && <div className="text-muted">Loading…</div>}
             {wikiPage === "missing" &&
               // taste nodes are synthesized from a hub bullet, so the bullet is
@@ -454,14 +481,13 @@ export default function GraphView({
                 <Markdown text={selected.text} />
               ) : (
                 <div className="text-muted">
-                  Not written up yet — this title is linked from other pages but
-                  has no page of its own.
+                  Not written up yet — this title is linked from other pages but has no page of its own.
                 </div>
               ))}
             {typeof wikiPage === "object" && wikiPage && <Markdown text={wikiPage.content} />}
           </div>
-        </div>
-      )}
+        )}
+      </Sheet>
     </div>
   );
 }

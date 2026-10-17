@@ -14,6 +14,8 @@ import {
 } from "./useHeatEngine";
 import { TitleSearch, type SearchResult } from "./QuickRate";
 import { graphPalette } from "@/lib/theme";
+import { Poster } from "./Poster";
+import { Button } from "./ui";
 
 const Graph3D = dynamic(() => import("./Graph3D"), { ssr: false });
 
@@ -292,10 +294,10 @@ export default function PredictPanel() {
 
   if (phase === "search") {
     return (
-      <div className="h-full space-y-4 overflow-y-auto px-5 py-4">
+      <div className="h-full space-y-4 overflow-y-auto px-4 py-4 md:px-5">
         <div>
-          <div className="mb-1.5 text-sm font-medium text-accent">Screen Test</div>
-          <div className="mb-2 text-xs text-muted">
+          <h2 className="mb-1 text-base font-medium text-fg md:text-sm">Screen Test</h2>
+          <div className="mb-2 text-sm text-muted md:text-xs">
             Search any movie or show and Louie screens it against your taste
             graph — watch the reasoning light up, then get his projected rating.
           </div>
@@ -322,34 +324,24 @@ export default function PredictPanel() {
       )}
 
       {picked && (
-        <div className="absolute left-3 top-3 z-10 flex items-center gap-3 rounded-lg border border-border bg-surface-1/90 p-2 pr-3 backdrop-blur-sm">
-          {picked.poster_path && (
-             
-            <img
-              src={`https://image.tmdb.org/t/p/w92${picked.poster_path}`}
-              alt={picked.title}
-              className="h-12 w-8 rounded object-cover"
-            />
-          )}
-          <div className="min-w-0">
-            <div className="text-xs font-medium">
+        <div className="absolute left-2 right-2 top-2 z-10 flex items-center gap-3 rounded-lg border border-border bg-surface-1/90 p-2 pr-1 backdrop-blur-sm md:left-3 md:right-auto md:top-3 md:pr-2">
+          <Poster path={picked.poster_path} alt="" width={32} height={48} className="h-12 w-8 rounded" eager />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium md:text-xs">
               {phase === "thinking" && "Screening "}
               {picked.title}
               {picked.year && <span className="text-muted"> ({picked.year})</span>}
             </div>
             {phase === "thinking" && (
-              <div className="text-[11px] text-muted">
+              <div className="text-xs text-muted">
                 <span className="animate-pulse text-accent">●</span> {status}
               </div>
             )}
           </div>
           {phase === "thinking" && (
-            <button
-              onClick={reset}
-              className="ml-1 text-xs text-muted hover:text-fg"
-            >
-              cancel
-            </button>
+            <Button variant="ghost" onClick={reset}>
+              Cancel
+            </Button>
           )}
         </div>
       )}
@@ -360,14 +352,7 @@ export default function PredictPanel() {
         <div className="absolute inset-0 z-20 flex items-center justify-center p-6">
           <div className="max-h-full w-96 max-w-full overflow-y-auto rounded-lg border border-border bg-surface-1/95 p-5 backdrop-blur-sm">
             <div className="flex gap-4">
-              {picked.poster_path && (
-                 
-                <img
-                  src={`https://image.tmdb.org/t/p/w185${picked.poster_path}`}
-                  alt={picked.title}
-                  className="h-36 w-24 shrink-0 rounded object-cover"
-                />
-              )}
+              <Poster path={picked.poster_path} alt="" width={96} height={144} className="h-36 w-24 shrink-0 rounded" eager />
               <div className="min-w-0">
                 <div className="text-sm font-medium leading-tight">
                   {picked.title}
@@ -383,23 +368,16 @@ export default function PredictPanel() {
             <div className="mt-3 text-sm">{verdict.why}</div>
             <div className="mt-4 flex items-center gap-2">
               {!verdict.seen && !onList && (
-                <button
-                  onClick={addToWatchlist}
-                  disabled={added !== "no"}
-                  className="rounded-md bg-accent-muted px-3 py-1.5 text-xs text-accent hover:bg-accent-muted disabled:opacity-60"
-                >
+                <Button variant="primary" onClick={addToWatchlist} disabled={added !== "no"}>
                   {added === "yes" ? "Added." : added === "saving" ? "Adding…" : "+ My watchlist"}
-                </button>
+                </Button>
               )}
               {!verdict.seen && onList && (
-                <span className="text-xs text-muted">Already on your watchlist</span>
+                <span className="text-sm text-muted md:text-xs">Already on your watchlist</span>
               )}
-              <button
-                onClick={reset}
-                className="rounded-md px-3 py-1.5 text-xs text-muted hover:text-accent"
-              >
+              <Button variant="ghost" onClick={reset}>
                 Search another
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -411,18 +389,12 @@ export default function PredictPanel() {
             <div className="text-sm font-medium text-danger">The screening broke down</div>
             <div className="mt-1 break-words text-xs text-muted">{errorMsg}</div>
             <div className="mt-4 flex gap-2">
-              <button
-                onClick={() => start(picked)}
-                className="rounded-md bg-accent-muted px-3 py-1.5 text-xs text-accent hover:bg-accent-muted"
-              >
+              <Button variant="primary" onClick={() => start(picked)}>
                 Try again
-              </button>
-              <button
-                onClick={reset}
-                className="rounded-md px-3 py-1.5 text-xs text-muted hover:text-accent"
-              >
+              </Button>
+              <Button variant="ghost" onClick={reset}>
                 Search another
-              </button>
+              </Button>
             </div>
           </div>
         </div>
