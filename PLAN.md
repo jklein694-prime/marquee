@@ -4,6 +4,8 @@
 
 Everything in this document was measured on the current `main` (commit `832157e`) with a production build, a seeded 18-title vault, and a headless iPhone 13 viewport. Typecheck, 46 unit tests, and `next build` all pass today. The audit script and seed vault live in the session scratchpad and are described in Phase 0 so they can be checked in.
 
+**Status (branch `claude/execute-plan`).** All five phases are implemented, one commit per phase. Every gate in this document is green: typecheck, lint, 49 unit tests, production build, the 200 KB first-paint budget (171 KB), and the Playwright layout, render, and flow suites on iPhone 13, Pixel 5, and desktop profiles. The open decisions in §7 were taken with their defaults. What remains manual is the real-Safari pass in `docs/DEVICE-CHECKLIST.md`.
+
 ---
 
 ## 1. What was found

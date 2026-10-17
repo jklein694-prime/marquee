@@ -115,6 +115,19 @@ npm install
 npm run dev
 ```
 
+## Development checks
+
+```bash
+npm run check      # typecheck, lint, unit tests, production build, bundle budget
+npm run test:e2e   # Playwright: layout + render gates and user flows on phone and desktop profiles
+```
+
+`test:e2e` runs the production build against the mock chat engine and a throwaway copy of
+`tests/e2e/fixtures/vault`, so it never touches a real vault or `data/`. Build first
+(`npm run build`). The phone profiles enforce no horizontal overflow, 44px tap targets, no text
+under 12px, and axe color contrast; the render gates enforce an idle graph canvas and the lazy
+three.js chunk. The real-Safari pass is manual: `docs/DEVICE-CHECKLIST.md`.
+
 ## Connect to Claude
 
 The chat expert (the "Louie" persona you talk to) runs on **Claude**, via the Claude Agent SDK.

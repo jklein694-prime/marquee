@@ -452,7 +452,7 @@ function Watchlist({
           </div>
         </section>
       )}
-      <section>
+      <section data-testid="my-watchlist">
         <h2 className="mb-1 text-base font-medium text-fg md:text-sm">My watchlist</h2>
         <div className="mb-3 text-sm text-muted md:text-xs">
           Yours alone, ranked — {canDrag ? "drag a card or use the arrows" : "use the arrows"} to reorder.
@@ -520,7 +520,7 @@ function Watchlist({
         </div>
       </section>
 
-      <section>
+      <section data-testid="suggestions">
         <h2 className="mb-1 text-base font-medium text-fg md:text-sm">Louie&apos;s suggestions</h2>
         <div className="mb-3 text-sm text-muted md:text-xs">Reranked as your taste graph grows — grab what looks good.</div>
         {loaded && suggestions.length === 0 && (
