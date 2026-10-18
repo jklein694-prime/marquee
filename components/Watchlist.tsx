@@ -6,9 +6,10 @@ import { canonicalService, canonicalServices } from "@/lib/services";
 import type { ChatSend } from "./ChatPane";
 import { useLocalStorage } from "@/lib/useLocalStorage";
 import { useFinePointer } from "@/lib/useMediaQuery";
-import { Button, Chip, IconButton, RatingGrid } from "./ui";
-import { ChevronDownIcon, ChevronUpIcon, DotsIcon } from "./icons";
-import { Poster } from "./Poster";
+import { Button, Chip, IconButton } from "./ui";
+import { Card } from "./Card";
+import { ReviewForm } from "./ReviewForm";
+import { ChevronDownIcon, ChevronUpIcon, DotsIcon, PlusIcon } from "./icons";
 
 const EXCLUDED_KEY = "marquee-excluded-services";
 
@@ -16,37 +17,19 @@ function trailerHref(item: WatchItem): string {
   return item.trailer ?? `https://www.youtube.com/results?search_query=${encodeURIComponent(`${item.title} trailer`)}`;
 }
 
-export function ReviewForm({
-  title,
-  onSubmit,
-  onCancel,
-}: {
-  title: string;
-  onSubmit: (rating: number, review: string) => void;
-  onCancel: () => void;
-}) {
-  const [rating, setRating] = useState<number | null>(null);
-  const [review, setReview] = useState("");
+/** one line of facts: where it streams, then Louie's projection */
+function Facts({ item }: { item: WatchItem }) {
+  const services = item.streaming?.length ? canonicalServices(item.streaming).slice(0, 2).join(" · ") : "Not streaming";
   return (
-    <div className="mt-3 rounded-md border border-border bg-surface-2 p-3">
-      <div className="mb-2 text-sm text-muted">How was {title}? Rate it:</div>
-      <RatingGrid value={rating} onChange={setRating} />
-      <textarea
-        value={review}
-        onChange={(e) => setReview(e.target.value)}
-        placeholder="Any thoughts? (optional)"
-        rows={2}
-        className="mt-3 w-full resize-none rounded-md border border-border bg-surface-0 px-3 py-2 text-base outline-none placeholder:text-muted focus:border-accent-border md:text-sm"
-      />
-      <div className="mt-2 flex gap-2">
-        <Button variant="primary" disabled={!rating} onClick={() => rating && onSubmit(rating, review.trim())}>
-          Log it
-        </Button>
-        <Button variant="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </div>
+    <>
+      {services}
+      {item.predicted && (
+        <>
+          {" · "}
+          <span className="text-info">Louie predicts {item.predicted.replace("-", "–")}</span>
+        </>
+      )}
+    </>
   );
 }
 
@@ -106,7 +89,7 @@ function MoreMenu({ items }: { items: MenuItem[] }) {
         <DotsIcon />
       </IconButton>
       {open && (
-        <div className="absolute right-0 top-11 z-20 w-64 overflow-hidden rounded-md border border-border bg-surface-1 shadow-lg md:top-9">
+        <div className="absolute right-0 top-11 z-20 w-64 overflow-hidden rounded-2xl border border-border bg-surface-1 shadow-xl md:top-9">
           {!active ? (
             items.map((it) => (
               <button
@@ -128,7 +111,7 @@ function MoreMenu({ items }: { items: MenuItem[] }) {
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="e.g. too slow-paced for me"
                 rows={2}
-                className="w-full resize-none rounded-md border border-border bg-surface-0 px-3 py-2 text-base outline-none placeholder:text-muted focus:border-accent-border md:text-sm"
+                className="w-full resize-none rounded-xl border border-border bg-surface-0 px-3 py-2 text-base outline-none placeholder:text-muted focus:border-accent-border md:text-sm"
               />
               <div className="mt-2 flex gap-2">
                 <Button
@@ -158,113 +141,12 @@ function MoreMenu({ items }: { items: MenuItem[] }) {
   );
 }
 
-function Card({
-  item,
-  menu,
-  actions,
-  primaryWatched = false,
-  reviewing,
-  pending,
-  onReview,
-  onReviewSubmit,
-  onReviewCancel,
-  dragProps,
-}: {
-  item: WatchItem;
-  menu: React.ReactNode;
-  actions?: React.ReactNode;
-  /** "Watched it" is the card's main action (my list) rather than a secondary one (suggestions) */
-  primaryWatched?: boolean;
-  reviewing: boolean;
-  pending?: boolean;
-  onReview: () => void;
-  onReviewSubmit: (rating: number, review: string) => void;
-  onReviewCancel: () => void;
-  dragProps?: React.HTMLAttributes<HTMLDivElement> & { draggable?: boolean };
-}) {
-  const [expanded, setExpanded] = useState(false);
+function LoggingPill() {
   return (
-    <div
-      {...dragProps}
-      className={`rounded-lg border border-border bg-surface-1 p-3 ${dragProps?.draggable ? "cursor-grab active:cursor-grabbing" : ""}`}
-    >
-      <div className="flex gap-3">
-        <Poster path={item.poster_path} alt="" width={56} height={84} className="h-21 w-14 shrink-0 rounded" />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-1">
-            <div className="min-w-0 flex-1 pt-2 text-base font-medium leading-tight md:text-sm">
-              {item.title}
-              {item.year && !item.title.includes(`(${item.year})`) && <span className="text-muted"> ({item.year})</span>}
-            </div>
-            <div className="-mr-2 -mt-1">{menu}</div>
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-1 text-xs">
-            {item.streaming && item.streaming.length > 0 ? (
-              canonicalServices(item.streaming)
-                .slice(0, 3)
-                .map((s) => (
-                  <span key={s} className="rounded bg-accent-muted px-1.5 py-0.5 text-accent">
-                    {s}
-                  </span>
-                ))
-            ) : (
-              <span className="text-muted">not streaming (US)</span>
-            )}
-            {item.predicted && (
-              <span className="rounded bg-info-subtle px-1.5 py-0.5 text-info" title="Louie's projected score based on your taste">
-                Louie predicts {item.predicted.replace("-", "–")}
-              </span>
-            )}
-          </div>
-          {item.note && <div className={`mt-1 text-sm text-muted md:text-xs ${expanded ? "" : "line-clamp-2"}`}>{item.note}</div>}
-        </div>
-      </div>
-      {expanded && (item.note || item.predicted) && (
-        <div className="mt-2 rounded-md border border-border bg-surface-2 p-3 text-sm leading-relaxed text-muted md:text-xs">
-          <div className="mb-1 flex items-center gap-2 font-semibold text-fg">
-            Why Louie picked this
-            {item.predicted && (
-              <span className="rounded bg-info-subtle px-1.5 py-0.5 font-normal text-info">
-                projected {item.predicted.replace("-", "–")}/10
-              </span>
-            )}
-          </div>
-          {item.note || "No note yet."}
-        </div>
-      )}
-      {expanded && item.overview && (
-        <div className="mt-2 rounded-md border border-border bg-surface-2 p-3 text-sm leading-relaxed text-muted md:text-xs">
-          <div className="mb-1 font-semibold text-fg">Synopsis</div>
-          {item.overview}
-        </div>
-      )}
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        {pending ? (
-          <span className="inline-flex min-h-11 items-center rounded-md border border-accent-border px-3 text-sm text-accent md:min-h-9 md:text-xs">
-            <span className="animate-pulse">logging…</span>
-          </span>
-        ) : (
-          <Button variant={primaryWatched ? "primary" : "secondary"} onClick={onReview} aria-expanded={reviewing}>
-            Watched it
-          </Button>
-        )}
-        {actions}
-        <a
-          href={trailerHref(item)}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex min-h-11 items-center rounded-md px-3 text-sm text-muted hover:bg-surface-3 hover:text-fg md:min-h-9 md:text-xs"
-        >
-          Trailer
-        </a>
-        {(item.note || item.overview) && (
-          <Button variant="ghost" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
-            {expanded ? "Less" : "More"}
-          </Button>
-        )}
-      </div>
-      {reviewing && !pending && <ReviewForm title={item.title} onSubmit={onReviewSubmit} onCancel={onReviewCancel} />}
-    </div>
+    <span className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-accent-border px-3.5 text-sm text-accent md:min-h-9 md:text-xs">
+      <span aria-hidden className="h-2 w-2 animate-pulse rounded-full bg-accent" />
+      logging…
+    </span>
   );
 }
 
@@ -375,7 +257,7 @@ function Watchlist({
     const result = onChat(
       `I watched ${item.title}${year} — ${rating}/10.${review ? ` ${review}` : ""}`,
       () => {
-        // (silent turn: nothing rendered in chat; the pill below is the UI)
+        // (silent turn: nothing rendered in chat; the pill is the UI)
         void post({ action: "remove", title: item.title });
         setPending((p) => {
           const next = new Set(p);
@@ -436,30 +318,36 @@ function Watchlist({
     if (result) setRemovingVeto((p) => new Set(p).add(title));
   }
 
+  const review = (item: WatchItem) =>
+    reviewing === item.title && !pending.has(item.title) ? (
+      <ReviewForm
+        title={item.title}
+        predicted={item.predicted}
+        onSubmit={(r, txt) => markWatched(item, r, txt)}
+        onCancel={() => setReviewing(null)}
+      />
+    ) : null;
+
   return (
-    <div className="h-full space-y-6 overflow-y-auto px-4 py-4 md:px-5">
+    <div className="h-full overflow-y-auto px-4 pb-6 md:px-5">
       {services.length > 0 && (
-        <section>
-          <div className="mb-2 text-sm text-muted md:text-xs">
-            My services — uncheck what you don&apos;t pay for to hide those picks (view only)
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {services.map((s) => (
-              <Chip key={s} selected={!excluded.has(s)} onClick={() => toggleService(s)}>
-                {s}
-              </Chip>
-            ))}
-          </div>
-        </section>
+        <div className="scrollbar-none -mx-4 flex gap-2 overflow-x-auto px-4 py-3 md:mx-0 md:px-0">
+          {services.map((s) => (
+            <Chip key={s} selected={!excluded.has(s)} onClick={() => toggleService(s)}>
+              {s}
+            </Chip>
+          ))}
+        </div>
       )}
-      <section data-testid="my-watchlist">
-        <h2 className="mb-1 text-base font-medium text-fg md:text-sm">My watchlist</h2>
-        <div className="mb-3 text-sm text-muted md:text-xs">
-          Yours alone, ranked — {canDrag ? "drag a card or use the arrows" : "use the arrows"} to reorder.
+
+      <section data-testid="my-watchlist" className="pt-3">
+        <div className="mb-2.5 flex items-baseline justify-between">
+          <h2 className="text-xs font-semibold tracking-[0.08em] text-muted">MY LIST{user.length ? ` · ${user.length}` : ""}</h2>
+          <span className="text-xs text-faint">ranked</span>
         </div>
         {loaded && user.length === 0 && (
-          <div className="rounded-lg border border-border bg-surface-1 p-4 text-sm text-muted md:text-xs">
-            Nothing saved yet — add picks from the suggestions below or from recommendations in the chat.
+          <div className="rounded-2xl border border-border bg-surface-1 p-4 text-sm text-muted md:text-xs">
+            Nothing saved yet — save picks from the suggestions below or from recommendations in the chat.
           </div>
         )}
         <div className="space-y-3">
@@ -469,13 +357,10 @@ function Watchlist({
               visible(item) && (
                 <Card
                   key={item.title}
-                  item={item}
-                  primaryWatched
-                  pending={pending.has(item.title)}
-                  reviewing={reviewing === item.title}
-                  onReview={() => setReviewing(reviewing === item.title ? null : item.title)}
-                  onReviewSubmit={(r, txt) => markWatched(item, r, txt)}
-                  onReviewCancel={() => setReviewing(null)}
+                  posterPath={item.poster_path}
+                  title={item.title}
+                  year={item.year}
+                  facts={<Facts item={item} />}
                   dragProps={
                     canDrag
                       ? {
@@ -493,38 +378,61 @@ function Watchlist({
                     <MoreMenu
                       items={[
                         { label: "Remove from my list", onConfirm: (reason) => removeFromMine(item, reason) },
-                        {
-                          label: "Not interested",
-                          tone: "danger",
-                          onConfirm: (reason) => addVeto(item, true, reason),
-                        },
+                        { label: "Not interested", tone: "danger", onConfirm: (reason) => addVeto(item, true, reason) },
                       ]}
                     />
                   }
-                  actions={
+                  primary={
+                    pending.has(item.title) ? (
+                      <LoggingPill />
+                    ) : (
+                      <Button variant="filled" onClick={() => setReviewing(reviewing === item.title ? null : item.title)} aria-expanded={reviewing === item.title}>
+                        Watched it
+                      </Button>
+                    )
+                  }
+                  secondary={
+                    <a
+                      href={trailerHref(item)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex min-h-11 items-center rounded-xl border border-border-strong px-3.5 text-sm text-fg hover:border-accent-border hover:text-accent md:min-h-9 md:px-3 md:text-xs"
+                    >
+                      Trailer
+                    </a>
+                  }
+                  tail={
                     user.length > 1 && (
-                      <span className="inline-flex items-center" aria-label={`Position ${i + 1} of ${user.length}`}>
-                        <IconButton label="Move up" disabled={i === 0} onClick={() => move(item.title, i - 1)}>
-                          <ChevronUpIcon />
+                      <span className="inline-flex overflow-hidden rounded-xl border border-border" aria-label={`Position ${i + 1} of ${user.length}`}>
+                        <IconButton label="Move up" className="rounded-none" disabled={i === 0} onClick={() => move(item.title, i - 1)}>
+                          <ChevronUpIcon size={18} />
                         </IconButton>
-                        <IconButton label="Move down" disabled={i === user.length - 1} onClick={() => move(item.title, i + 1)}>
-                          <ChevronDownIcon />
+                        <IconButton
+                          label="Move down"
+                          className="rounded-none border-l border-border"
+                          disabled={i === user.length - 1}
+                          onClick={() => move(item.title, i + 1)}
+                        >
+                          <ChevronDownIcon size={18} />
                         </IconButton>
-                        <span className="text-xs text-muted">#{i + 1}</span>
                       </span>
                     )
                   }
-                />
+                >
+                  {review(item)}
+                </Card>
               )
           )}
         </div>
       </section>
 
-      <section data-testid="suggestions">
-        <h2 className="mb-1 text-base font-medium text-fg md:text-sm">Louie&apos;s suggestions</h2>
-        <div className="mb-3 text-sm text-muted md:text-xs">Reranked as your taste graph grows — grab what looks good.</div>
+      <section data-testid="suggestions" className="pt-6">
+        <div className="mb-2.5 flex items-baseline justify-between">
+          <h2 className="text-xs font-semibold tracking-[0.08em] text-muted">LOUIE SUGGESTS</h2>
+          <span className="text-xs text-faint">best fit first</span>
+        </div>
         {loaded && suggestions.length === 0 && (
-          <div className="rounded-lg border border-border bg-surface-1 p-4 text-sm text-muted md:text-xs">
+          <div className="rounded-2xl border border-border bg-surface-1 p-4 text-sm text-muted md:text-xs">
             No suggestions on deck — ask for recommendations in the chat.
           </div>
         )}
@@ -532,67 +440,78 @@ function Watchlist({
           {suggestions.filter(visible).map((item) => (
             <Card
               key={item.title}
-              item={item}
-              pending={pending.has(item.title)}
-              reviewing={reviewing === item.title}
-              onReview={() => setReviewing(reviewing === item.title ? null : item.title)}
-              onReviewSubmit={(r, txt) => markWatched(item, r, txt)}
-              onReviewCancel={() => setReviewing(null)}
+              posterPath={item.poster_path}
+              title={item.title}
+              year={item.year}
+              facts={<Facts item={item} />}
+              note={item.note}
               menu={
                 <MoreMenu
-                  items={[
-                    {
-                      label: "Not now (hide for two weeks)",
-                      instant: true,
-                      onConfirm: () => {
-                        setSuggestions((s) => s.filter((x) => x.title !== item.title));
-                        save({ action: "snooze", title: item.title });
-                      },
-                    },
-                    {
-                      label: "Not interested",
-                      tone: "danger",
-                      onConfirm: (reason) => addVeto(item, false, reason),
-                    },
-                  ]}
+                  items={[{ label: "Not interested", tone: "danger", onConfirm: (reason) => addVeto(item, false, reason) }]}
                 />
               }
-              actions={
+              primary={
+                pending.has(item.title) ? (
+                  <LoggingPill />
+                ) : (
+                  <Button
+                    variant="filled"
+                    onClick={() =>
+                      post({
+                        action: "add",
+                        title: item.title,
+                        year: item.year,
+                        media: item.media,
+                        note: item.note,
+                        predicted: item.predicted,
+                      })
+                    }
+                  >
+                    <PlusIcon size={16} />
+                    Save
+                  </Button>
+                )
+              }
+              secondary={
+                !pending.has(item.title) && (
+                  <Button variant="secondary" onClick={() => setReviewing(reviewing === item.title ? null : item.title)} aria-expanded={reviewing === item.title}>
+                    Watched it
+                  </Button>
+                )
+              }
+              tail={
                 <Button
-                  variant="primary"
-                  onClick={() =>
-                    post({
-                      action: "add",
-                      title: item.title,
-                      year: item.year,
-                      media: item.media,
-                      note: item.note,
-                      predicted: item.predicted,
-                    })
-                  }
+                  variant="ghost"
+                  onClick={() => {
+                    setSuggestions((s) => s.filter((x) => x.title !== item.title));
+                    save({ action: "snooze", title: item.title });
+                  }}
+                  title="Hide for two weeks"
                 >
-                  + My watchlist
+                  Not now
                 </Button>
               }
-            />
+            >
+              {review(item)}
+            </Card>
           ))}
         </div>
       </section>
 
-      <section>
+      <section className="pt-6">
         <button
           onClick={() => setShowVetoes((v) => !v)}
           aria-expanded={showVetoes}
-          className="flex min-h-11 w-full items-center gap-2 text-left text-base font-medium text-muted hover:text-fg md:min-h-9 md:text-sm"
+          className="flex min-h-11 w-full items-center gap-2 text-left text-xs font-semibold tracking-[0.08em] text-muted hover:text-fg md:min-h-9"
         >
           <span className={`transition-transform ${showVetoes ? "rotate-90" : ""}`}>›</span>
-          Not interested{notInterested.length > 0 && ` (${notInterested.length})`}
+          NOT INTERESTED{notInterested.length > 0 && ` · ${notInterested.length}`}
         </button>
         {showVetoes && (
           <>
             <div className="mb-2 mt-1 text-sm text-muted md:text-xs">Never suggested again — remove one if you change your mind.</div>
             {notInterested.length === 0 ? (
-              <div className="rounded-lg border border-border bg-surface-1 p-4 text-sm text-muted md:text-xs">
+              <div className="rounded-2xl border border-border bg-surface-1 p-4 text-sm text-muted md:text-xs">
                 Nothing here — say &ldquo;don&apos;t suggest X&rdquo; in chat to add one.
               </div>
             ) : (
@@ -600,7 +519,7 @@ function Watchlist({
                 {notInterested.map((item) => (
                   <div
                     key={item.title}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface-1 py-1 pl-3 pr-1 text-sm"
+                    className="flex items-center justify-between gap-2 rounded-2xl border border-border bg-surface-1 py-1 pl-4 pr-1 text-sm"
                   >
                     <div className="min-w-0">
                       <div className="truncate font-medium">{item.title}</div>

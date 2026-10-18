@@ -70,7 +70,6 @@ export function withAlpha(hex: string, a: number): string {
 // the heat target (accent) and the cold edge, as rgb triples for lerping
 const glowRgb = () => rgb(graphPalette().accent);
 const edgeRgb = () => rgb(graphPalette().edge);
-const BASE_VAL: Record<string, number> = { genre: 7, taste: 3.5, ghost: 3.5 };
 
 // pin every settled node in place so ghost arrivals can't jiggle the
 // constellation — only the new nodes move. A refetch creates fresh (unpinned)
@@ -297,7 +296,11 @@ export function useHeatEngine(
     nodeVal: (node: NodeObject) => {
       const n = node as unknown as GraphNode;
       const h = heatRef.current.get(n.id) ?? 0;
-      return (BASE_VAL[n.kind] ?? 5) + h * 5 * (h > 0.05 ? pulse() : 1);
+      // size by connections, as in the 2D view: hubs read as hubs
+      const d = mapsRef.current.adj.get(n.id)?.length ?? 0;
+      const base =
+        n.kind === "taste" || n.kind === "ghost" ? 2.5 : n.kind === "genre" ? 4 + Math.sqrt(d) * 1.6 : 3 + Math.sqrt(d);
+      return base + h * 5 * (h > 0.05 ? pulse() : 1);
     },
     // an edge lights when EITHER endpoint is hot — a considered node shows
     // all its connections, not just links between two simultaneously-hot nodes
@@ -328,9 +331,9 @@ export function SpotCard({ spot }: { spot: Spot | null }) {
   return (
     <div
       key={spot.id + spot.thought}
-      className="pointer-events-none absolute bottom-6 left-0 right-0 z-10 flex justify-center"
+      className="pointer-events-none absolute bottom-20 left-0 right-0 z-10 flex justify-center"
     >
-      <div className="subtitle-rise max-w-[80%] rounded-lg border border-border bg-surface-1/90 px-4 py-2 text-center backdrop-blur-sm">
+      <div className="subtitle-rise max-w-[80%] rounded-2xl border border-border bg-surface-1/90 px-4 py-2 text-center backdrop-blur-sm">
         <div className="text-sm font-medium text-accent">{spot.label}</div>
         <div className="text-xs text-muted">{spot.thought}</div>
       </div>

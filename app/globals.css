@@ -51,7 +51,7 @@
   --node-taste: #e8dcc8;
   --node-watchlist: #f5b94266; /* translucent loved: on the list, not yet a verdict */
   --node-ghost: #e8dcc855;
-  --edge: #2a221a;
+  --edge: #ece2cf1c; /* cream threads; the 2D view scales the alpha itself */
   --edge-ghost: #e8dcc840;
   --edge-active: #f5b942;
 }
@@ -154,6 +154,14 @@ button:active:not(:disabled),
 }
 .subtitle-rise {
   animation: subtitle-rise 0.35s ease-out;
+}
+
+/* the taste graph's ground: a warm radial dust over the page black, so the
+   constellation has depth instead of sitting on flat black */
+.graph-ground {
+  background:
+    radial-gradient(120% 80% at 50% 42%, rgb(245 185 66 / 0.07) 0%, rgb(245 185 66 / 0.02) 40%, transparent 70%),
+    radial-gradient(120% 80% at 50% 42%, #1a1510 0%, #0f0c09 45%, #080605 100%);
 }
 
 /* bottom sheet (mobile node details, menus) */

@@ -121,13 +121,12 @@ new favorite becomes a fresh branch of your taste instead.`,
 - **My services** (top) — unselect the streaming services you don't pay for to hide
   picks available *only* there. It's a view filter, saved in your browser; nothing is
   deleted and titles with no streaming info always stay visible.
-- **My watchlist** — titles you've saved, ranked. Use the **arrows** to reorder (on a
-  desktop you can also drag a card). **More** expands the note, the full **synopsis**,
-  and **Louie's projected rating and why**. Each card has **Watched it**, **Trailer**,
-  and a **⋮** menu with **Remove** and **Not interested** (each with an optional reason).
-- **Louie's suggestions** — Louie's ranked queue, reordered best-fit-first as your
-  taste sharpens. Cards carry a **"Louie predicts"** score, a **+ My watchlist**
-  button, and a **⋮** menu with **Not now** and **Not interested**.
+- **My list** — titles you've saved, ranked. Each card has one row: **Watched it**,
+  **Trailer**, and the **arrows** to reorder (on a desktop you can also drag a card).
+  The **⋮** menu holds **Remove** and **Not interested** (each with an optional reason).
+- **Louie suggests** — Louie's ranked queue, best fit first, each with where it
+  streams and a **"Louie predicts"** score. The row is **Save**, **Watched it**, and
+  **Not now**; the **⋮** menu holds **Not interested**.
 - **Not interested** (collapsible, at the bottom) — your permanent vetoes, each with a
   **Remove** button to lift it.
 
@@ -165,9 +164,10 @@ the cool color is structure:
 - **faded gold** — something on your watchlist
 - **cream** — a taste note (a distilled preference). These are the smallest nodes.
 
-**Tap a node** to open its wiki page and light up its connections; tap it again,
-or the background, to deselect. The **i** button shows this legend in the graph.
-**3D** is a choice, not the default, on a phone — it costs battery.
+**Bigger means more connected.** Tap a node to open its page and light up its
+neighbourhood; everything else recedes. Tap again, or the background, to deselect.
+The capsule at the bottom switches **2D/3D**, **fits** the whole graph, and shows
+this **legend**. **3D** is a choice, not the default, on a phone — it costs battery.
 
 **A node with no page** doesn't mean it's broken or reserved — it means the app knows
 about it (something links to it) but no page has been written *yet*. For categories,

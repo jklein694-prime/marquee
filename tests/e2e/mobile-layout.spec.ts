@@ -36,7 +36,7 @@ test.describe("mobile layout gate", () => {
     await expect(page.getByText("Thief (1981)").first()).toBeVisible();
     await expectLayoutClean(page, "watchlist");
     await page.getByRole("button", { name: "Watched it" }).first().click();
-    await expect(page.getByText(/How was/)).toBeVisible();
+    await expect(page.getByText(/how was it/i)).toBeVisible();
     await expectLayoutClean(page, "watchlist review form");
     await page.getByRole("button", { name: "More actions" }).first().click();
     await expect(page.getByRole("button", { name: "Not interested" }).first()).toBeVisible();
@@ -47,7 +47,7 @@ test.describe("mobile layout gate", () => {
     await openPanel(page, "Rate", "Quick Rate");
     await page.getByPlaceholder("Search a title…").locator("visible=true").fill("thief");
     await page.getByRole("button", { name: /Thief/ }).first().click();
-    await expect(page.getByText(/How was/)).toBeVisible();
+    await expect(page.getByText(/how was it/i)).toBeVisible();
     await expectLayoutClean(page, "quick rate review form");
   });
 

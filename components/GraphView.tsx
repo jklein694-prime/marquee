@@ -5,27 +5,32 @@ import dynamic from "next/dynamic";
 import type { GraphNode, GraphLink } from "@/lib/vault";
 import type { ForceGraphMethods as Graph2DMethods } from "react-force-graph-2d";
 import { Markdown } from "./Markdown";
-import { useHeatEngine, SpotCard, nodeColor, endId, withAlpha, norm, heatColor, pinNodes } from "./useHeatEngine";
+import { useHeatEngine, SpotCard, nodeColor, endId, withAlpha, norm, heatColor, pinNodes, rgb } from "./useHeatEngine";
 import { onThinking, type ThinkingEvent } from "@/lib/liveThinking";
 import { graphPalette } from "@/lib/theme";
 import { useGraph, type GraphData } from "@/lib/graphClient";
 import { Chip, IconButton, Sheet } from "./ui";
-import { InfoIcon } from "./icons";
+import { FitIcon, InfoIcon } from "./icons";
 
 const Graph2D = dynamic(() => import("./Graph2D"), { ssr: false });
 const Graph3D = dynamic(() => import("./Graph3D"), { ssr: false });
 
-// base draw radius; the 2D canvas adds a heat bump on top of this
-function nodeRadius(n: GraphNode): number {
-  return n.kind === "genre" ? 7 : n.kind === "taste" || n.kind === "ghost" ? 3.5 : 5;
+// --- size by what matters ----------------------------------------------------
+// A node's radius follows how connected it is: hubs (Crime, Michael Mann) read
+// as hubs, a one-link title stays small. Categories get the bigger ramp.
+function nodeRadius(n: GraphNode, degree: number): number {
+  if (n.kind === "taste" || n.kind === "ghost") return 3.5;
+  if (n.kind === "watchlist") return 4;
+  if (n.kind === "genre") return Math.min(14, 5 + Math.sqrt(degree) * 1.9);
+  return Math.min(9, 4 + Math.sqrt(degree) * 1.2);
 }
+const HUB_DEGREE = 6;
 
-// --- glow sprites -----------------------------------------------------------
-// ctx.shadowBlur on every node every frame was the single most expensive
-// thing the 2D canvas did (a blur pass per node per repaint). A radial
-// gradient rendered once per palette color and drawn with drawImage costs
-// one texture blit. Hot nodes glow in the accent color so the cache stays
-// bounded by the palette instead of growing with every lerp step.
+// --- paint helpers (all cached per palette color) -----------------------------
+// ctx.shadowBlur per node per frame was the single most expensive thing the
+// canvas did. A radial-gradient sprite rendered once per color and blitted
+// with drawImage is one texture copy. The "lit sphere" core is a radial
+// gradient too, built per paint from three cached stops.
 const SPRITE = 64;
 const sprites = new Map<string, HTMLCanvasElement>();
 function glowSprite(hex: string): HTMLCanvasElement {
@@ -35,13 +40,26 @@ function glowSprite(hex: string): HTMLCanvasElement {
   c.width = c.height = SPRITE;
   const g = c.getContext("2d")!;
   const grad = g.createRadialGradient(SPRITE / 2, SPRITE / 2, 0, SPRITE / 2, SPRITE / 2, SPRITE / 2);
-  grad.addColorStop(0, withAlpha(hex, 0.5));
-  grad.addColorStop(0.45, withAlpha(hex, 0.14));
+  grad.addColorStop(0, withAlpha(hex, 0.55));
+  grad.addColorStop(0.4, withAlpha(hex, 0.16));
   grad.addColorStop(1, withAlpha(hex, 0));
   g.fillStyle = grad;
   g.fillRect(0, 0, SPRITE, SPRITE);
   sprites.set(hex, c);
   return c;
+}
+const shades = new Map<string, { light: string; dark: string }>();
+function shadeOf(color: string): { light: string; dark: string } {
+  let s = shades.get(color);
+  if (s) return s;
+  const [r, g, b] = rgb(color);
+  const mix = (c: number, t: number, to: number) => Math.round(c + (to - c) * t);
+  s = {
+    light: `rgb(${mix(r, 0.55, 255)},${mix(g, 0.55, 255)},${mix(b, 0.55, 255)})`,
+    dark: `rgb(${mix(r, 0.45, 0)},${mix(g, 0.45, 0)},${mix(b, 0.45, 0)})`,
+  };
+  shades.set(color, s);
+  return s;
 }
 
 type WikiPage = { title: string; content: string };
@@ -55,6 +73,14 @@ const VERB_TEXT: Record<ThinkingEvent["verb"], string> = {
   scan: "scanning the wiki…",
   dispatch: "dispatching a research agent…",
   research: "researching on TMDB…",
+};
+
+const KIND_LABEL: Record<GraphNode["kind"], string> = {
+  movie: "Title",
+  genre: "Category",
+  watchlist: "On your watchlist",
+  taste: "Taste note",
+  ghost: "Forming",
 };
 
 // --- live ghosts: things the stream touches that aren't graph nodes yet ---
@@ -145,7 +171,7 @@ function GraphView({
   const [wiki, setWiki] = useState<WikiState | null>(null);
   const fg2dRef = useRef<Graph2DMethods | undefined>(undefined);
 
-  // cached lookup sets for the flush (rebuilt only when the real graph changes)
+  // cached lookup sets (rebuilt only when the real graph changes)
   const realIds = useMemo(() => new Set(data.nodes.map((n) => n.id)), [data]);
   const realEdges = useMemo(() => {
     const s = new Set<string>();
@@ -156,6 +182,20 @@ function GraphView({
     }
     return s;
   }, [data]);
+  const degree = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of data.links) {
+      for (const id of [endId(l.source), endId(l.target)]) m.set(id, (m.get(id) ?? 0) + 1);
+    }
+    return m;
+  }, [data]);
+  const counts = useMemo(
+    () => ({
+      titles: data.nodes.filter((n) => n.kind === "movie").length,
+      categories: data.nodes.filter((n) => n.kind === "genre").length,
+    }),
+    [data]
+  );
   const realRef = useRef({ realIds, realEdges });
   const dataRef = useRef(data);
   useEffect(() => {
@@ -186,16 +226,15 @@ function GraphView({
 
   // 2D: frame the whole constellation once the layout settles for a given
   // data set (and again when the canvas changes size); a user's own zoom is
-  // never overridden mid-session
+  // never overridden mid-session. Fit is also a button.
   const fittedForRef = useRef<GraphData | null>(null);
-  const fit2d = useCallback(() => fg2dRef.current?.zoomToFit(400, 28), []);
   const onEngineStop = useCallback(() => {
     if (fittedForRef.current === dataRef.current) return;
     fittedForRef.current = dataRef.current;
-    fit2d();
-  }, [fit2d]);
+    fg2dRef.current?.zoomToFit(400, 36);
+  }, []);
   useEffect(() => {
-    if (mode === "2d" && fittedForRef.current === data) fit2d();
+    if (mode === "2d" && fittedForRef.current === data) fg2dRef.current?.zoomToFit(400, 36);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size]);
 
@@ -244,7 +283,24 @@ function GraphView({
     return ids;
   }, [selected, data]);
 
-  const linkActive = (l: GraphLink) => !!selected && (endId(l.source) === selected.id || endId(l.target) === selected.id);
+  const touchesSelected = (l: GraphLink) =>
+    !!selected && (endId(l.source) === selected.id || endId(l.target) === selected.id);
+
+  // edges fade with distance from the selection; with nothing selected, the
+  // threads between hubs read a little stronger than the rest
+  const edgeColor = (l: GraphLink): string => {
+    const p = graphPalette();
+    if ((l as { ghost?: boolean }).ghost) return p.edgeGhost;
+    if (neighborIds) {
+      if (touchesSelected(l)) return p.edgeActive;
+      const a = endId(l.source);
+      const b = endId(l.target);
+      return withAlpha(p.label, neighborIds.has(a) || neighborIds.has(b) ? 0.2 : 0.045);
+    }
+    const hubs = (degree.get(endId(l.source)) ?? 0) >= HUB_DEGREE ? 1 : 0;
+    const hubs2 = (degree.get(endId(l.target)) ?? 0) >= HUB_DEGREE ? 1 : 0;
+    return withAlpha(p.label, 0.09 + 0.05 * (hubs + hubs2));
+  };
 
   // heat overrides toward glow; the cold rest keeps selection dim/highlight,
   // and recedes while a live show is running so the hot nodes read clearly.
@@ -255,20 +311,20 @@ function GraphView({
     // shimmer needs render ticks while the stream is active but nothing is hot
     tickWhenIdle: () => Date.now() - lastEventAtRef.current < 6000,
     coldNode: (n) => {
-      if (neighborIds) return neighborIds.has(n.id) ? nodeColor(n) : withAlpha(nodeColor(n), 0.12);
+      if (neighborIds) return neighborIds.has(n.id) ? nodeColor(n) : withAlpha(nodeColor(n), 0.14);
       if (engine.heatRef.current.size > 0) return withAlpha(nodeColor(n), 0.3);
       // stream active, nothing hot yet — the whole graph breathes ("indexing")
       if (Date.now() - lastEventAtRef.current < 6000) return withAlpha(nodeColor(n), 0.38 + 0.12 * Math.sin(Date.now() / 250));
       return nodeColor(n);
     },
-    coldLink: (l) =>
-      (l as { ghost?: boolean }).ghost
-        ? graphPalette().edgeGhost
-        : linkActive(l as unknown as GraphLink)
-          ? graphPalette().edgeActive
-          : graphPalette().edge,
-    coldLinkWidth: (l) => (linkActive(l as unknown as GraphLink) ? 2 : 1),
+    coldLink: (l) => edgeColor(l as unknown as GraphLink),
+    coldLinkWidth: (l) => (touchesSelected(l as unknown as GraphLink) ? 1.6 : 1),
   });
+  const engineFgRef = engine.fgRef;
+  const fit = useCallback(() => {
+    if (mode === "2d") fg2dRef.current?.zoomToFit(400, 36);
+    else engineFgRef.current?.zoomToFit(600, 40);
+  }, [mode, engineFgRef]);
 
   // flush buffered ghost ops ≤2×/s: one sim re-heat per flush, not per event;
   // pinning first means only the NEW nodes move — the constellation holds still
@@ -351,53 +407,10 @@ function GraphView({
     setSelected((cur) => (cur?.id === n.id ? null : n));
   };
 
+  const selectedDegree = selected ? (degree.get(selected.id) ?? 0) : 0;
+
   return (
-    <div ref={containerRef} className="relative h-full w-full">
-      {data.nodes.length > 0 && (
-        <div className="absolute left-2 top-2 z-10 flex items-center gap-1 rounded-lg border border-border bg-surface-1/90 p-1 backdrop-blur-sm md:left-3 md:top-3">
-          {(["2d", "3d"] as const).map((m) => (
-            <Chip key={m} selected={mode === m} onClick={() => onModeChange(m)} className="px-3">
-              {m.toUpperCase()}
-            </Chip>
-          ))}
-          <IconButton label="Legend" aria-expanded={legendOpen} onClick={() => setLegendOpen((v) => !v)}>
-            <InfoIcon />
-          </IconButton>
-          {liveLabel && (
-            <span className="hidden items-center gap-1.5 px-2 text-xs text-muted sm:flex">
-              <span className="animate-pulse text-accent">●</span> {liveLabel}
-            </span>
-          )}
-        </div>
-      )}
-      {legendOpen && (
-        <div className="absolute left-2 top-16 z-10 w-56 rounded-lg border border-border bg-surface-1/95 p-3 text-sm backdrop-blur-sm md:left-3 md:text-xs">
-          <div className="mb-1.5 font-medium text-fg">What the colors mean</div>
-          {(
-            [
-              ["loved", "loved"],
-              ["liked", "liked"],
-              ["meh", "meh"],
-              ["disliked", "disliked"],
-              ["unrated", "seen, no verdict yet"],
-              ["category", "genre, person, theme…"],
-              ["watchlist", "on your watchlist"],
-              ["taste", "a taste note"],
-            ] as const
-          ).map(([k, label]) => (
-            <div key={k} className="flex items-center gap-2 py-0.5 text-muted">
-              <span aria-hidden className="inline-block h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: graphPalette()[k] }} />
-              {label}
-            </div>
-          ))}
-          <div className="mt-1.5 text-muted">Pinch or scroll to zoom — labels appear as you get closer.</div>
-          {liveLabel && (
-            <div className="mt-1.5 flex items-center gap-1.5 text-muted sm:hidden">
-              <span className="animate-pulse text-accent">●</span> {liveLabel}
-            </div>
-          )}
-        </div>
-      )}
+    <div ref={containerRef} className="graph-ground relative h-full w-full">
       {data.nodes.length === 0 ? (
         <div className="flex h-full items-center justify-center text-sm text-muted">
           The taste graph is empty — talk movies and watch it grow.
@@ -424,17 +437,18 @@ function GraphView({
           width={size.width}
           height={size.height}
           graphData={liveData}
-          backgroundColor={graphPalette().background}
+          // transparent: the container's gradient ground shows through
+          backgroundColor="rgba(0,0,0,0)"
           d3AlphaDecay={0.05}
           d3VelocityDecay={0.5}
           onEngineStop={onEngineStop}
           // pad each node's clickable area beyond its drawn radius so taps land on
-          // touch screens (drawn radii are only 3.5–7px); also helps mouse aim
+          // touch screens; also helps mouse aim
           nodePointerAreaPaint={(node, color, ctx) => {
             const n = node as unknown as GraphNode & { x: number; y: number };
             ctx.fillStyle = color;
             ctx.beginPath();
-            ctx.arc(n.x, n.y, nodeRadius(n) + 8, 0, 2 * Math.PI);
+            ctx.arc(n.x, n.y, nodeRadius(n, degree.get(n.id) ?? 0) + 8, 0, 2 * Math.PI);
             ctx.fill();
           }}
           linkColor={engine.graphProps.linkColor}
@@ -443,54 +457,131 @@ function GraphView({
           onBackgroundClick={() => setSelected(null)}
           nodeCanvasObject={(node, ctx, globalScale) => {
             const n = node as unknown as GraphNode & { x: number; y: number };
+            // the first frames paint before the simulation has placed a node;
+            // a gradient at NaN throws, so wait for a position
+            if (!Number.isFinite(n.x) || !Number.isFinite(n.y)) return;
+            const d = degree.get(n.id) ?? 0;
+            const hub = n.kind === "genre" && d >= HUB_DEGREE;
             // heat is read through refs at paint time, so the 2D view is
             // exactly as live as the 3D one whenever a repaint happens
             const h = engine.heatRef.current.get(n.id) ?? 0;
             const base = nodeColor(n);
             const color = h > 0.05 ? heatColor(base, h) : base;
-            const r = nodeRadius(n) + h * 4;
+            const r = nodeRadius(n, d) + h * 3;
+            const isSelected = selected?.id === n.id;
             const dimmed = neighborIds ? !neighborIds.has(n.id) : false;
             ctx.save();
-            if (dimmed) ctx.globalAlpha = 0.15;
+            if (dimmed) ctx.globalAlpha = 0.2;
             else if (h <= 0.05) {
               if (engine.heatRef.current.size > 0) ctx.globalAlpha = 0.35;
               else if (Date.now() - lastEventAtRef.current < 6000) ctx.globalAlpha = 0.42 + 0.12 * Math.sin(Date.now() / 250);
             }
-            // glow: one cached sprite per palette color (accent when hot)
-            const gr = r * 2.4;
+            // bloom: one cached sprite per palette color (accent when hot);
+            // hubs and the selection bloom wider
+            const gr = r * (hub || isSelected ? 3.2 : 2.4);
             ctx.drawImage(glowSprite(h > 0.05 ? graphPalette().accent : base), n.x - gr, n.y - gr, gr * 2, gr * 2);
-            ctx.fillStyle = color;
+            // lit sphere: highlight up-left, shade at the rim
+            const { light, dark } = shadeOf(color.startsWith("#") ? color : base);
+            const g = ctx.createRadialGradient(n.x - r * 0.35, n.y - r * 0.35, r * 0.1, n.x, n.y, r);
+            g.addColorStop(0, light);
+            g.addColorStop(0.55, color);
+            g.addColorStop(1, dark);
+            ctx.fillStyle = g;
             ctx.beginPath();
             ctx.arc(n.x, n.y, r, 0, 2 * Math.PI);
             ctx.fill();
-            if (selected?.id === n.id) {
-              ctx.strokeStyle = graphPalette().edgeActive;
-              ctx.lineWidth = 1.5 / globalScale;
+            // hubs carry a thin halo ring; the selection a brighter one
+            if (hub || isSelected) {
+              ctx.strokeStyle = isSelected ? graphPalette().edgeActive : withAlpha(base, 0.4);
+              ctx.lineWidth = (isSelected ? 1.5 : 1) / globalScale;
               ctx.beginPath();
-              ctx.arc(n.x, n.y, r + 3, 0, 2 * Math.PI);
+              ctx.arc(n.x, n.y, r + (isSelected ? 4 : 3) / globalScale, 0, 2 * Math.PI);
               ctx.stroke();
             }
-            // labels only where they can be read: a node at least ~6 screen px
-            // across (categories first as you zoom in, then titles, then
-            // notes), plus anything selected, neighbouring, or hot. Zoomed
-            // out on a phone that means a clean constellation, not label soup.
+            // labels in tiers so the fitted view is a constellation, not
+            // soup: hubs as small caps once ~6 screen px across (the only
+            // labels at the fit zoom on a desktop), the other categories and
+            // the titles only once a zoom makes them big enough to own the
+            // space under them, notes deeper still, anything lit always
             const screenR = r * globalScale;
-            const show = (neighborIds && !dimmed) || h > 0.5 || selected?.id === n.id || screenR >= 6;
+            const lit = (neighborIds && !dimmed) || h > 0.5 || isSelected;
+            const show =
+              lit ||
+              (n.kind === "genre" && screenR >= (hub ? 6 : 11)) ||
+              ((n.kind === "movie" || n.kind === "watchlist") && screenR >= 12) ||
+              (n.kind === "taste" && globalScale > 1.8);
             if (show) {
-              ctx.font = `${11 / globalScale}px sans-serif`;
+              const caps = n.kind === "genre";
+              ctx.font = `${caps ? 500 : 400} ${(caps ? 10 : 11) / globalScale}px sans-serif`;
+              ctx.letterSpacing = caps ? `${0.9 / globalScale}px` : "0px";
               ctx.textAlign = "center";
               ctx.textBaseline = "top";
-              ctx.fillStyle = withAlpha(graphPalette().label, 0.8);
-              ctx.fillText(n.label, n.x, n.y + r + 2);
+              ctx.fillStyle = withAlpha(graphPalette().label, lit || caps ? 0.88 : 0.72);
+              ctx.fillText(caps ? n.label.toUpperCase() : n.label, n.x, n.y + r + 3 / globalScale);
             }
             ctx.restore();
           }}
         />
       )}
+
+      {data.nodes.length > 0 && (
+        <div className="pointer-events-none absolute left-3 top-3 z-10 flex items-center gap-2 rounded-full border border-border bg-surface-1/80 py-1.5 pl-2.5 pr-3.5 text-xs text-muted backdrop-blur-sm">
+          <span aria-hidden className={`h-2 w-2 rounded-full bg-accent shadow-[0_0_10px_var(--accent)] ${liveLabel ? "animate-pulse" : ""}`} />
+          {liveLabel || `${counts.titles} titles · ${counts.categories} categories`}
+        </div>
+      )}
+
+      {data.nodes.length > 0 && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center">
+          <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-border bg-surface-1/85 p-1 backdrop-blur-md">
+            {(["2d", "3d"] as const).map((m) => (
+              <Chip key={m} selected={mode === m} onClick={() => onModeChange(m)} className="rounded-full border-transparent px-4">
+                {m.toUpperCase()}
+              </Chip>
+            ))}
+            <span aria-hidden className="mx-0.5 h-6 w-px bg-border-strong" />
+            <IconButton label="Fit the whole graph" className="rounded-full" onClick={fit}>
+              <FitIcon size={18} />
+            </IconButton>
+            <IconButton label="Legend" className="rounded-full" aria-expanded={legendOpen} onClick={() => setLegendOpen((v) => !v)}>
+              <InfoIcon size={18} />
+            </IconButton>
+          </div>
+        </div>
+      )}
+      {legendOpen && (
+        <div className="absolute bottom-20 left-1/2 z-10 w-64 -translate-x-1/2 rounded-2xl border border-border bg-surface-1/95 p-4 text-sm backdrop-blur-sm md:text-xs">
+          <div className="mb-2 text-xs font-semibold tracking-[0.08em] text-muted">WHAT THE COLORS MEAN</div>
+          {(
+            [
+              ["loved", "loved"],
+              ["liked", "liked"],
+              ["meh", "meh"],
+              ["disliked", "disliked"],
+              ["unrated", "seen, no verdict yet"],
+              ["category", "genre, person, theme…"],
+              ["watchlist", "on your watchlist"],
+              ["taste", "a taste note"],
+            ] as const
+          ).map(([k, label]) => (
+            <div key={k} className="flex items-center gap-2.5 py-1 text-fg">
+              <span
+                aria-hidden
+                className="inline-block h-3 w-3 shrink-0 rounded-full"
+                style={{ backgroundColor: graphPalette()[k], boxShadow: `0 0 8px ${graphPalette()[k]}` }}
+              />
+              {label}
+            </div>
+          ))}
+          <div className="mt-2 text-muted">Bigger means more connected. Pinch to zoom; names appear as you get closer.</div>
+        </div>
+      )}
+
       <SpotCard spot={engine.spot} />
       <Sheet
         open={!!selected}
         onClose={closeSelected}
+        eyebrow={selected ? `${KIND_LABEL[selected.kind]} · ${selectedDegree} ${selectedDegree === 1 ? "link" : "links"}` : undefined}
         title={selected ? (typeof wikiPage === "object" && wikiPage ? wikiPage.title : selected.label) : ""}
       >
         {selected && (
