@@ -317,7 +317,7 @@ function PredictPanel({ version, active = true }: { version: number; active?: bo
       )}
 
       {picked && (
-        <div className="absolute left-2 right-2 top-2 z-10 flex items-center gap-3 rounded-lg border border-border bg-surface-1/90 p-2 pr-1 backdrop-blur-sm md:left-3 md:right-auto md:top-3 md:pr-2">
+        <div className="absolute left-3 right-3 top-3 z-10 flex items-center gap-3 rounded-2xl border border-border bg-surface-1/85 p-2 pr-1 backdrop-blur-sm md:right-auto md:pr-2">
           <Poster path={picked.poster_path} alt="" width={32} height={48} className="h-12 w-8 rounded" eager />
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium md:text-xs">
@@ -343,7 +343,7 @@ function PredictPanel({ version, active = true }: { version: number; active?: bo
 
       {phase === "done" && verdict && picked && (
         <div className="absolute inset-0 z-20 flex items-center justify-center p-6">
-          <div className="max-h-full w-96 max-w-full overflow-y-auto rounded-lg border border-border bg-surface-1/95 p-5 backdrop-blur-sm">
+          <div className="max-h-full w-96 max-w-full overflow-y-auto rounded-2xl border border-border bg-surface-1/95 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.6)] backdrop-blur-sm">
             <div className="flex gap-4">
               <Poster path={picked.poster_path} alt="" width={96} height={144} className="h-36 w-24 shrink-0 rounded" eager />
               <div className="min-w-0">
@@ -361,7 +361,7 @@ function PredictPanel({ version, active = true }: { version: number; active?: bo
             <div className="mt-3 text-sm">{verdict.why}</div>
             <div className="mt-4 flex items-center gap-2">
               {!verdict.seen && !onList && (
-                <Button variant="primary" onClick={addToWatchlist} disabled={added !== "no"}>
+                <Button variant="filled" onClick={addToWatchlist} disabled={added !== "no"}>
                   {added === "yes" ? "Added." : added === "saving" ? "Adding…" : "+ My watchlist"}
                 </Button>
               )}
@@ -378,11 +378,11 @@ function PredictPanel({ version, active = true }: { version: number; active?: bo
 
       {phase === "error" && picked && (
         <div className="absolute inset-0 z-20 flex items-center justify-center p-6">
-          <div className="w-96 max-w-full rounded-lg border border-border bg-surface-1/95 p-5 backdrop-blur-sm">
+          <div className="w-96 max-w-full rounded-2xl border border-border bg-surface-1/95 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.6)] backdrop-blur-sm">
             <div className="text-sm font-medium text-danger">The screening broke down</div>
             <div className="mt-1 break-words text-xs text-muted">{errorMsg}</div>
             <div className="mt-4 flex gap-2">
-              <Button variant="primary" onClick={() => start(picked)}>
+              <Button variant="filled" onClick={() => start(picked)}>
                 Try again
               </Button>
               <Button variant="ghost" onClick={reset}>

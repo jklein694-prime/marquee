@@ -170,6 +170,39 @@ describe("runApiPredictTurn", () => {
     expect(names).not.toContain("Write");
     expect(names).not.toContain("Edit");
   });
+
+  it("nudges once, in the same transcript, when the turn ends without a verdict", async () => {
+    const { client, calls } = fakeClient([
+      { content: [tool("p1", "mcp__predict__consider", { node: "Neo-noir", thought: "loves it" })] },
+      { content: [text("Probably an eight.")] }, // ended without the tool call
+      { content: [tool("p2", "mcp__predict__verdict", { predicted: "8/10", why: "because" })] },
+      { content: [text("")] },
+    ]);
+    setApiClient(client);
+    const t = collect();
+    const res = await runApiPredictTurn("Predict: Thief", t.emit, signal());
+    expect(res.ok).toBe(true);
+    const verdict = t.events.find((e) => e.type === "verdict") as { predicted: string } | undefined;
+    expect(verdict?.predicted).toBe("8"); // "8/10" repaired, not rejected
+    // the nudge rides the same conversation: the third request carries the
+    // consider call, the prose, and then the follow-up user message
+    const msgs = calls[2].params.messages as { role: string; content: unknown }[];
+    expect(msgs.map((m) => m.role)).toEqual(["user", "assistant", "user", "assistant", "user"]);
+    expect(String(msgs[4].content)).toMatch(/without calling mcp__predict__verdict/);
+  });
+
+  it("does not nudge twice: a second verdict-less end is salvaged by the route", async () => {
+    const { client, calls } = fakeClient([
+      { content: [text("I lean 7-8.")] },
+      { content: [text("Still 7-8.")] },
+    ]);
+    setApiClient(client);
+    const t = collect();
+    const res = await runApiPredictTurn("Predict: Thief", t.emit, signal());
+    expect(res).toEqual({ finalText: "Still 7-8.", ok: true });
+    expect(calls).toHaveLength(2);
+    expect(t.events.map((e) => e.type)).toEqual([]);
+  });
 });
 
 describe("subagent slots", () => {

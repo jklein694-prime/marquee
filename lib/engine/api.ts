@@ -3,9 +3,10 @@
 // this process, the system prompt + tools are prompt-cached, and subagents are
 // parallel API loops instead of child processes.
 import { randomUUID } from "crypto";
-import type { BetaToolUnion } from "@anthropic-ai/sdk/resources/beta/messages/messages";
+import type { BetaMessageParam, BetaToolUnion } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { z } from "zod";
 import { MOVIE_EXPERT_PROMPT, PREDICT_PROMPT } from "../prompt";
+import { VERDICT_NUDGE, normalizeScore } from "../score";
 import { SUBAGENTS, type SubagentType } from "../subagents";
 import {
   allocateTool,
@@ -268,6 +269,7 @@ export async function runApiPredictTurn(
   emit: Emit,
   signal: AbortSignal
 ): Promise<{ finalText: string; ok: boolean }> {
+  let sawVerdict = false;
   const tools: ToolDef[] = [
     readTool,
     globTool,
@@ -289,26 +291,30 @@ export async function runApiPredictTurn(
       name: "mcp__predict__verdict",
       description: "Deliver the final projected score. Call EXACTLY ONCE, then end your turn.",
       schema: z.object({
-        predicted: z
-          .string()
-          .regex(/^\d+(?:-\d+)?$/)
-          .describe('"8" or a range "8-9" — same format the watchlist requires'),
+        predicted: z.string().describe('"8" or a range "8-9" — same format the watchlist requires'),
         why: z.string().describe("2-3 plain sentences citing named categories and comparable rated titles"),
         seen: z.boolean().optional().describe("true when a wiki page shows the user already saw it"),
         actual: z.number().optional().describe("their actual /10 rating when seen"),
       }),
       run: (a) => {
-        emit({ type: "verdict", ...a });
+        const predicted = normalizeScore(a.predicted);
+        if (!predicted) return 'predicted must be a score 1-10 like "8" or a range like "8-9" — call verdict again';
+        sawVerdict = true;
+        emit({ type: "verdict", ...a, predicted });
         return "Recorded. End your turn now.";
       },
     }),
     ...tmdbTools.filter((t) => t.name === "mcp__tmdb__search_movie" || t.name === "mcp__tmdb__movie_details"),
   ];
   let lastStatus = 0;
-  const res = await runLoop({
+  // runLoop appends to this transcript, so a second pass continues the same
+  // conversation: the model keeps everything it read and only has to decide
+  const messages: BetaMessageParam[] = [{ role: "user", content: userText }];
+  const pass = () =>
+    runLoop({
     system: API_PREDICT_PROMPT,
     tools,
-    messages: [{ role: "user", content: userText }],
+    messages,
     effort: "medium",
     maxTokens: 16000,
     signal,
@@ -330,5 +336,11 @@ export async function runApiPredictTurn(
       },
     },
   });
+  let res = await pass();
+  // ended cleanly but never called verdict: one nudge, same session
+  if (!sawVerdict && res.end === "end_turn" && !signal.aborted) {
+    messages.push({ role: "user", content: VERDICT_NUDGE });
+    res = await pass();
+  }
   return { finalText: res.finalText, ok: res.end === "end_turn" };
 }

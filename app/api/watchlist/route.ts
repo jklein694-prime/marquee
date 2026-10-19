@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sameTitle } from "@/lib/titles";
 import {
   readUserList,
   writeUserList,
@@ -41,9 +42,11 @@ export async function GET() {
     }
     if (userRefresh) pending += stale;
   }
-  const have = new Set(stored.map((i) => i.title.toLowerCase()));
+  // rule: nothing on the user's own list is ever suggested back to them. The
+  // hub may spell it "Thief" with the year apart, or "Thief (1981)" — match
+  // on the loose key, never on the raw string.
   const peeked = hubSuggestions()
-    .filter((s) => !have.has(s.title.toLowerCase()))
+    .filter((s) => !stored.some((i) => sameTitle(i.title, s.title)))
     .map(peekSuggestion);
   const suggestions = peeked.map((p) => p.item);
   const cold = peeked.filter((p) => !p.hit).map((p) => p.item);
@@ -57,7 +60,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const items = readUserList();
-  const idx = (title: string) => items.findIndex((i) => i.title.toLowerCase() === String(title).toLowerCase());
+  const idx = (title: string) => items.findIndex((i) => sameTitle(i.title, String(title)));
 
   if (body.action === "add") {
     if (!body.title) return NextResponse.json({ error: "missing title" }, { status: 400 });

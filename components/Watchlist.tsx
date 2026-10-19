@@ -6,6 +6,7 @@ import { canonicalService, canonicalServices } from "@/lib/services";
 import type { ChatSend } from "./ChatPane";
 import { useLocalStorage } from "@/lib/useLocalStorage";
 import { useFinePointer } from "@/lib/useMediaQuery";
+import { sameTitle } from "@/lib/titles";
 import { Button, Chip, IconButton } from "./ui";
 import { Card } from "./Card";
 import { ReviewForm } from "./ReviewForm";
@@ -17,18 +18,13 @@ function trailerHref(item: WatchItem): string {
   return item.trailer ?? `https://www.youtube.com/results?search_query=${encodeURIComponent(`${item.title} trailer`)}`;
 }
 
-/** one line of facts: where it streams, then Louie's projection */
+/** one line of facts: where it streams (Louie's projection has its own badge) */
 function Facts({ item }: { item: WatchItem }) {
-  const services = item.streaming?.length ? canonicalServices(item.streaming).slice(0, 2).join(" · ") : "Not streaming";
+  const services = item.streaming?.length ? canonicalServices(item.streaming).slice(0, 3).join(" · ") : "Not streaming";
+  const kind = item.media === "tv" ? "TV" : "Movie";
   return (
     <>
-      {services}
-      {item.predicted && (
-        <>
-          {" · "}
-          <span className="text-info">Louie predicts {item.predicted.replace("-", "–")}</span>
-        </>
-      )}
+      {kind} · {services}
     </>
   );
 }
@@ -188,7 +184,11 @@ function Watchlist({
     setExcludedRaw(JSON.stringify([...next]));
   }
 
-  const services = canonicalServices([...user, ...suggestions].flatMap((i) => i.streaming ?? [])).sort();
+  // the server already keeps saved titles out of the suggestions; the client
+  // enforces the same rule on whatever it holds, so a save shows instantly and
+  // a stale read can never put one title in both lists
+  const onDeck = suggestions.filter((s) => !user.some((u) => sameTitle(u.title, s.title)));
+  const services = canonicalServices([...user, ...onDeck].flatMap((i) => i.streaming ?? [])).sort();
   // view-only filter: hide items available ONLY on excluded services; items with
   // no streaming data always show, and nothing is ever removed from the data
   const visible = (i: WatchItem) => !i.streaming?.length || i.streaming.some((s) => !excluded.has(canonicalService(s)));
@@ -361,6 +361,9 @@ function Watchlist({
                   title={item.title}
                   year={item.year}
                   facts={<Facts item={item} />}
+                  predicted={item.predicted}
+                  note={item.note}
+                  synopsis={item.overview}
                   dragProps={
                     canDrag
                       ? {
@@ -431,20 +434,22 @@ function Watchlist({
           <h2 className="text-xs font-semibold tracking-[0.08em] text-muted">LOUIE SUGGESTS</h2>
           <span className="text-xs text-faint">best fit first</span>
         </div>
-        {loaded && suggestions.length === 0 && (
+        {loaded && onDeck.length === 0 && (
           <div className="rounded-2xl border border-border bg-surface-1 p-4 text-sm text-muted md:text-xs">
             No suggestions on deck — ask for recommendations in the chat.
           </div>
         )}
         <div className="space-y-3">
-          {suggestions.filter(visible).map((item) => (
+          {onDeck.filter(visible).map((item) => (
             <Card
               key={item.title}
               posterPath={item.poster_path}
               title={item.title}
               year={item.year}
               facts={<Facts item={item} />}
+              predicted={item.predicted}
               note={item.note}
+              synopsis={item.overview}
               menu={
                 <MoreMenu
                   items={[{ label: "Not interested", tone: "danger", onConfirm: (reason) => addVeto(item, false, reason) }]}
