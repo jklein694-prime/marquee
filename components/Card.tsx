@@ -6,9 +6,9 @@
 // pushed to the right edge (reorder control, "Not now"). The row never wraps —
 // enforced here, so no screen can grow a second line of buttons again.
 //
-// The reason shows two lines; tapping it opens the full reason and the
-// synopsis in place. That is a disclosure on the text, not a button in the
-// row, so the row stays one row.
+// Louie's reason is always shown in full, labelled, under the poster row;
+// tapping that block reveals the synopsis. That is a disclosure on the
+// text, not a button in the row, so the row stays one row.
 
 import { useState, type HTMLAttributes, type ReactNode } from "react";
 import { Poster } from "./Poster";
@@ -36,9 +36,9 @@ export function Card({
   facts?: ReactNode;
   /** Louie's projected score, e.g. "8-9"; always visible when present */
   predicted?: string;
-  /** Louie's reason; two lines, tap to open */
+  /** Louie's reason, shown in full */
   note?: string;
-  /** the TMDB overview, shown under the open reason */
+  /** the TMDB overview, revealed by tapping the reason block */
   synopsis?: string;
   menu?: ReactNode;
   primary: ReactNode;
@@ -92,42 +92,46 @@ export function Card({
             </div>
             {menu && <div className="-mr-2 -mt-1.5 shrink-0">{menu}</div>}
           </div>
-          {expandable && (
-            <button
-              type="button"
-              onClick={() => setOpen((v) => !v)}
-              aria-expanded={open}
-              aria-label={
-                open
-                  ? "Hide the reason and synopsis"
-                  : "Show the full reason and synopsis"
-              }
-              className="mt-1 flex min-h-11 w-full flex-col justify-center text-left"
-            >
-              {note && (
-                <div
-                  className={`text-sm leading-snug text-muted md:text-xs ${open ? "" : "line-clamp-2"}`}
-                >
-                  {note}
-                </div>
-              )}
-              {open && synopsis && (
-                <div className="mt-2 border-t border-border pt-2 text-sm leading-snug text-muted md:text-xs">
-                  <div className="mb-0.5 text-xs font-semibold tracking-[0.08em] text-faint">
-                    SYNOPSIS
-                  </div>
-                  {synopsis}
-                </div>
-              )}
-              {!open && synopsis && (
-                <div className="mt-0.5 text-xs text-faint">
-                  {note ? "more" : "synopsis"}
-                </div>
-              )}
-            </button>
-          )}
         </div>
       </div>
+      {expandable && (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-label={
+            open
+              ? "Hide the synopsis"
+              : synopsis
+                ? "Show the synopsis"
+                : "Louie's reason"
+          }
+          className="mt-2.5 block w-full rounded-xl bg-surface-2 px-3 py-2 text-left"
+        >
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-xs font-semibold tracking-[0.08em] text-faint">
+              {note ? "WHY LOUIE PICKED THIS" : "SYNOPSIS"}
+            </span>
+            {synopsis && note && (
+              <span className="text-xs text-faint">
+                {open ? "hide synopsis" : "synopsis"}
+              </span>
+            )}
+          </div>
+          {note && (
+            <div className="mt-0.5 text-sm leading-snug text-fg md:text-xs">
+              {note}
+            </div>
+          )}
+          {synopsis && (open || !note) && (
+            <div
+              className={`text-sm leading-snug text-muted md:text-xs ${note ? "mt-2 border-t border-border pt-2" : "mt-0.5"}`}
+            >
+              {synopsis}
+            </div>
+          )}
+        </button>
+      )}
       <div className="mt-3 flex items-center gap-2 overflow-hidden whitespace-nowrap">
         {primary}
         {secondary}

@@ -24,7 +24,14 @@ export const dynamic = "force-dynamic";
 let userRefresh: Promise<void> | null = null;
 
 export async function GET() {
-  const stored = readUserList();
+  const hub = hubSuggestions();
+  // a title saved before its save carried Louie's why or score borrows them
+  // from the hub bullet of the same title, when there is one
+  const stored = readUserList().map((i) => {
+    if (i.note && i.predicted) return i;
+    const h = hub.find((s) => sameTitle(s.title, i.title));
+    return h ? { ...i, note: i.note || h.note, predicted: i.predicted || h.predicted } : i;
+  });
   let pending = 0;
   if (tmdbEnabled()) {
     // self-healing: anything never verified or past the TTL gets re-checked
@@ -45,7 +52,7 @@ export async function GET() {
   // rule: nothing on the user's own list is ever suggested back to them. The
   // hub may spell it "Thief" with the year apart, or "Thief (1981)" — match
   // on the loose key, never on the raw string.
-  const peeked = hubSuggestions()
+  const peeked = hub
     .filter((s) => !stored.some((i) => sameTitle(i.title, s.title)))
     .map(peekSuggestion);
   const suggestions = peeked.map((p) => p.item);
