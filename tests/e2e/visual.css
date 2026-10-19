@@ -1,0 +1,5 @@
+/* applied for every visual-gate screenshot: the force-graph canvas is
+   non-deterministic, so it is hidden and everything around it is compared */
+canvas {
+  visibility: hidden;
+}

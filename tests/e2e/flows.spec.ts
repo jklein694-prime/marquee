@@ -59,12 +59,15 @@ test.describe("flows", () => {
 
   test("watchlist: save a suggestion, log it as watched, it leaves the list", async ({ page }) => {
     await openPanel(page, "List", "Watchlist");
-    const suggestion = page.getByTestId("suggestions").locator("div.rounded-lg", { hasText: "Thief (1981)" }).first();
-    await expect(suggestion).toBeVisible();
-    await suggestion.getByRole("button", { name: "+ My watchlist" }).click();
-    // now under "My watchlist" too (the suggestion stays until the hub changes)
+    const mine = page.getByTestId("my-watchlist").locator("article", { hasText: "Thief (1981)" });
+    // the data dir is shared across the profiles of one run: an earlier
+    // profile may have left it saved (a saved title leaves the suggestions)
+    if (!(await mine.count())) {
+      const suggestion = page.getByTestId("suggestions").locator("article", { hasText: "Thief (1981)" }).first();
+      await expect(suggestion).toBeVisible();
+      await suggestion.getByRole("button", { name: "Save" }).click();
+    }
     await expect(page.getByText("Nothing saved yet")).toHaveCount(0);
-    const mine = page.getByTestId("my-watchlist").locator("div.rounded-lg", { hasText: "Thief (1981)" });
     await expect(mine).toBeVisible();
     await mine.getByRole("button", { name: "Watched it" }).click();
     await mine.getByRole("radio", { name: "8" }).click();
@@ -81,7 +84,7 @@ test.describe("flows", () => {
     await page.getByRole("button", { name: /Thief/ }).first().click();
     await page.getByRole("radio", { name: "9" }).click();
     await page.getByRole("button", { name: "Log it" }).click();
-    await expect(page.getByText(/logging Thief \(1981\)/)).toBeVisible();
+    await expect(page.getByText(/logging Thief \(1981\)/i)).toBeVisible();
     await expect(page.getByText("Logged Thief (1981) — 9/10.")).toBeVisible({ timeout: 15_000 });
     // ready for the next one
     await expect(page.getByPlaceholder("Search a title…").locator("visible=true")).toBeVisible();

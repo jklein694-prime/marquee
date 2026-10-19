@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useRef, useState } from "react";
-import { ReviewForm } from "./Watchlist";
+import { ReviewForm } from "./ReviewForm";
 import type { ChatSend } from "./ChatPane";
 import { Poster } from "./Poster";
 import { Button } from "./ui";
@@ -62,9 +62,9 @@ export function TitleSearch({ onPick, autoFocus }: { onPick: (r: SearchResult) =
         aria-label="Search a title"
         type="search"
         enterKeyHint="search"
-        className="min-h-11 w-full rounded-md border border-border bg-surface-2 px-3 text-base outline-none placeholder:text-muted focus:border-accent-border md:text-sm"
+        className="min-h-12 w-full rounded-full border border-border-strong bg-surface-2 px-4 text-base outline-none placeholder:text-muted focus:border-accent-border md:min-h-10 md:text-sm"
       />
-      {searching && <div className="text-xs text-muted">searching…</div>}
+      {searching && <div className="px-1 text-xs text-muted">searching…</div>}
       {shown.map((r) => (
         <button
           key={`${r.media}-${r.id}`}
@@ -73,20 +73,20 @@ export function TitleSearch({ onPick, autoFocus }: { onPick: (r: SearchResult) =
             setResults([]);
             onPick(r);
           }}
-          className="flex w-full items-center gap-3 rounded-lg border border-border bg-surface-1 p-2 text-left hover:border-accent-border"
+          className="flex w-full items-center gap-3 rounded-2xl border border-border bg-surface-1 p-2 text-left hover:border-accent-border"
         >
-          <Poster path={r.poster_path} alt="" width={44} height={66} className="h-[66px] w-11 shrink-0 rounded" />
+          <Poster path={r.poster_path} alt="" width={44} height={66} className="h-[66px] w-11 shrink-0 rounded-lg" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-base font-medium md:text-sm">
               {r.title}
-              {r.year && <span className="text-muted"> ({r.year})</span>}
+              {r.year && <span className="text-muted"> {r.year}</span>}
             </div>
             <span className="text-xs text-muted">{r.media === "tv" ? "TV" : "Movie"}</span>
           </div>
         </button>
       ))}
-      {error && query.trim() && <div className="text-sm text-danger md:text-xs">{error}</div>}
-      {!searching && !error && query.trim() && shown.length === 0 && <div className="text-xs text-muted">No results.</div>}
+      {error && query.trim() && <div className="px-1 text-sm text-danger md:text-xs">{error}</div>}
+      {!searching && !error && query.trim() && shown.length === 0 && <div className="px-1 text-xs text-muted">No results.</div>}
     </div>
   );
 }
@@ -123,54 +123,52 @@ function QuickRate({ onChat }: { onChat: ChatSend }) {
   }
 
   return (
-    <div className="h-full space-y-4 overflow-y-auto px-4 py-4 md:px-5">
-      <div>
-        <h2 className="mb-1 text-base font-medium text-fg md:text-sm">Quick rate</h2>
-        <div className="text-sm text-muted md:text-xs">
-          Search any movie or show, rate it, and it logs to your taste graph in the background — no need to add it to
-          your watchlist first.
-        </div>
-      </div>
-
+    <div className="flex h-full flex-col gap-4 overflow-y-auto px-4 py-4 md:px-5">
       {picked ? (
-        <div className="rounded-lg border border-border bg-surface-1 p-3">
-          <div className="flex gap-3">
-            <Poster path={picked.poster_path} alt="" width={56} height={84} className="h-21 w-14 shrink-0 rounded" eager />
+        <div>
+          <div className="flex items-center gap-4">
+            <Poster path={picked.poster_path} alt="" width={72} height={108} className="h-27 w-18 shrink-0 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.5)]" eager />
             <div className="min-w-0 flex-1">
-              <div className="text-base font-medium leading-tight md:text-sm">
-                {picked.title}
-                {picked.year && <span className="text-muted"> ({picked.year})</span>}
-              </div>
-              <span className="mt-1 inline-block rounded bg-accent-muted px-1.5 py-0.5 text-xs text-accent">
+              <div className="text-xl font-semibold leading-tight md:text-base">{picked.title}</div>
+              <div className="mt-1 text-sm text-muted md:text-xs">
+                {picked.year ? `${picked.year} · ` : ""}
                 {picked.media === "tv" ? "TV" : "Movie"}
-              </span>
+              </div>
+              <Button variant="secondary" className="mt-2.5" onClick={() => setPicked(null)}>
+                Change title
+              </Button>
             </div>
           </div>
-          {/* full card width: ten rating cells never fit beside a poster on a phone */}
           <ReviewForm title={picked.title} onSubmit={submit} onCancel={() => setPicked(null)} />
         </div>
       ) : (
-        <TitleSearch autoFocus onPick={setPicked} />
+        <div>
+          <h2 className="text-xs font-semibold tracking-[0.08em] text-muted">RATE ANYTHING</h2>
+          <div className="mb-3 mt-1 text-sm text-muted md:text-xs">
+            Search a movie or show and rate it. It logs to your taste graph in the background, no watchlist needed.
+          </div>
+          <TitleSearch autoFocus onPick={setPicked} />
+        </div>
       )}
 
       {(pending.length > 0 || logged.length > 0) && (
-        <div className="space-y-1.5 border-t border-border pt-3 text-sm md:text-xs">
+        <div className="mt-auto space-y-2 border-t border-border pt-3 text-sm md:text-xs">
           {pending.map((p) => (
-            <div key={p.id} className="flex items-center gap-2 text-accent">
-              <span className="animate-pulse">●</span> logging {p.label}…
+            <div key={p.id} className="flex items-center gap-2.5 text-muted">
+              <span aria-hidden className="h-2 w-2 animate-pulse rounded-full bg-accent shadow-[0_0_8px_var(--accent)]" />
+              Logging {p.label} in the background
             </div>
           ))}
           {logged.map((l) => (
-            <div key={l.id} className="text-muted">
+            <div key={l.id} className="flex items-center gap-2.5 text-muted">
+              <span aria-hidden className="h-2 w-2 rounded-full bg-success" />
               Logged {l.label}.
             </div>
           ))}
           {logged.length > 0 && (
-            <div className="pt-1">
-              <Button variant="ghost" onClick={() => setLogged([])}>
-                Clear
-              </Button>
-            </div>
+            <Button variant="ghost" onClick={() => setLogged([])}>
+              Clear
+            </Button>
           )}
         </div>
       )}

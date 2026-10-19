@@ -5,6 +5,7 @@ import { Markdown, ThrottledMarkdown } from "./Markdown";
 import { OptionPicker, MovieCards, MovieChecklist, OptionsData, RecsData, ChecklistData } from "./Widgets";
 import { clearChat, followTurn, loadChat, saveChat, startTurn, stopTurn, type ClientTurnEvent } from "@/lib/turnClient";
 import { Button } from "./ui";
+import { ArrowUpIcon } from "./icons";
 
 type Msg =
   | { role: "user" | "assistant"; text: string }
@@ -472,7 +473,7 @@ export default function ChatPane({
             return (
               <div
                 key={i}
-                className="ml-8 break-words rounded-lg border border-accent-border bg-accent-subtle px-3.5 py-2.5 text-[15px] leading-relaxed md:ml-12 md:text-sm"
+                className="ml-10 break-words rounded-2xl rounded-br-md border border-accent-border bg-accent-muted px-4 py-3 text-[15px] leading-relaxed md:ml-16 md:text-sm"
               >
                 {msg.text}
               </div>
@@ -482,7 +483,7 @@ export default function ChatPane({
           return (
             <div
               key={i}
-              className="mr-2 break-words rounded-lg border border-border bg-surface-1 px-3.5 py-2.5 text-[15px] leading-relaxed md:mr-6 md:text-sm"
+              className="mr-4 break-words rounded-2xl rounded-bl-md border border-border bg-surface-1 px-4 py-3 text-[15px] leading-relaxed md:mr-10 md:text-sm"
             >
               {msg.text ? (
                 live ? (
@@ -499,12 +500,9 @@ export default function ChatPane({
         <div ref={bottomRef} />
       </div>
       {busy && (
-        <div className="flex items-center gap-2 border-t border-border bg-surface-1 px-3 py-1.5 md:px-5">
-          <span className="relative flex h-2.5 w-2.5 shrink-0">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
-            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent" />
-          </span>
-          <span className="min-w-0 flex-1 truncate text-xs text-accent">{activity}</span>
+        <div className="mx-3 mb-2 flex items-center gap-2.5 rounded-xl border border-border bg-surface-1 py-1.5 pl-3.5 pr-1.5 md:mx-5">
+          <span aria-hidden className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-accent shadow-[0_0_10px_var(--accent)]" />
+          <span className="min-w-0 flex-1 truncate text-sm text-fg md:text-xs">{activity}</span>
           <Button
             variant="secondary"
             size="sm"
@@ -523,7 +521,7 @@ export default function ChatPane({
         </div>
       )}
       <form
-        className="flex gap-2 border-t border-border bg-surface-1 p-3 md:p-4"
+        className="flex items-center gap-2 border-t border-border bg-surface-0 px-3 py-2.5 md:px-4 md:py-3"
         onSubmit={(e) => {
           e.preventDefault();
           const t = input;
@@ -539,11 +537,16 @@ export default function ChatPane({
           placeholder={busy ? "the expert is working — messages queue up…" : "Talk movies & shows…"}
           aria-label="Message"
           // text-base (16px) on mobile stops iOS from auto-zooming on focus; desktop keeps 14px
-          className="min-h-11 min-w-0 flex-1 rounded-md border border-border-strong bg-surface-2 px-3 text-base outline-none placeholder:text-muted focus:border-accent-border md:text-sm"
+          className="min-h-12 min-w-0 flex-1 rounded-full border border-border-strong bg-surface-2 px-4 text-base outline-none placeholder:text-muted focus:border-accent-border md:min-h-10 md:text-sm"
         />
-        <Button type="submit" variant="primary" size="md" disabled={!input.trim()}>
-          Send
-        </Button>
+        <button
+          type="submit"
+          aria-label="Send"
+          disabled={!input.trim()}
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent text-accent-text transition-colors disabled:bg-surface-3 disabled:text-muted md:h-10 md:w-10"
+        >
+          <ArrowUpIcon size={20} />
+        </button>
       </form>
     </>
   );

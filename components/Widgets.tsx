@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Poster } from "./Poster";
-import { Button, RatingGrid } from "./ui";
+import { Button, RatingScale } from "./ui";
 
 export interface OptionsData {
   title: string;
@@ -67,8 +67,8 @@ export function OptionPicker({
   };
 
   return (
-    <div className={`rounded-lg border border-border bg-surface-1 p-4 ${answered ? "opacity-60" : ""}`}>
-      <div className="mb-1 text-base font-medium text-accent md:text-sm">{data.title}</div>
+    <div className={`rounded-2xl border border-border bg-surface-1 p-4 ${answered ? "opacity-60" : ""}`}>
+      <div className="mb-2 text-xs font-semibold tracking-[0.08em] text-muted">{data.title.toUpperCase()}</div>
       {data.context && <div className="mb-2 text-sm text-muted md:text-xs">{data.context}</div>}
       <div className="flex flex-col gap-2">
         {data.options.map((o) => (
@@ -77,7 +77,7 @@ export function OptionPicker({
             disabled={inert}
             aria-pressed={data.mode === "multi" ? picked.has(o.label) : undefined}
             onClick={() => toggle(o.label)}
-            className={`min-h-11 w-full rounded-lg border px-4 py-3 text-left text-[15px] transition-colors md:text-sm ${
+            className={`min-h-12 w-full rounded-xl border px-4 py-3 text-left text-[15px] transition-colors md:min-h-10 md:text-sm ${
               picked.has(o.label) ? "border-accent bg-accent-muted text-accent" : "border-border bg-transparent text-fg"
             } ${locked && !answered ? "cursor-wait opacity-50" : answered ? "cursor-default" : "cursor-pointer hover:border-accent-border"}`}
           >
@@ -145,8 +145,8 @@ export function MovieChecklist({
   };
 
   return (
-    <div className={`rounded-lg border border-border bg-surface-1 p-4 ${answered ? "opacity-60" : ""}`}>
-      <div className="mb-2 text-base font-medium text-accent md:text-sm">{data.title}</div>
+    <div className={`rounded-2xl border border-border bg-surface-1 p-4 ${answered ? "opacity-60" : ""}`}>
+      <div className="mb-2 text-xs font-semibold tracking-[0.08em] text-muted">{data.title.toUpperCase()}</div>
       <div className="space-y-2">
         {data.movies.map((m) => {
           const key = label(m);
@@ -176,7 +176,8 @@ export function MovieChecklist({
               </label>
               {checked && (
                 <div className="pl-8 md:pl-7">
-                  <RatingGrid
+                  <RatingScale
+                    compact
                     value={seen[key] ?? null}
                     disabled={inert}
                     label={`Rating for ${key}`}
@@ -218,7 +219,7 @@ export function MovieCards({ data }: { data: RecsData }) {
       {data.movies.map((m) => {
         const key = `${m.title}-${m.year}`;
         return (
-          <div key={key} className="w-44 shrink-0 snap-start overflow-hidden rounded-lg border border-border bg-surface-1">
+          <div key={key} className="w-44 shrink-0 snap-start overflow-hidden rounded-2xl border border-border bg-surface-1">
             <Poster path={m.poster_path} alt="" width={176} height={264} className="h-66 w-full" />
             <div className="p-3">
               <div className="text-sm font-medium leading-tight">
@@ -230,7 +231,7 @@ export function MovieCards({ data }: { data: RecsData }) {
                 <div className="mt-1.5 inline-block rounded bg-accent-muted px-1.5 py-0.5 text-xs text-accent">{m.streaming}</div>
               )}
               <Button
-                variant={added.has(key) ? "secondary" : "primary"}
+                variant={added.has(key) ? "secondary" : "filled"}
                 className="mt-2 w-full"
                 disabled={added.has(key)}
                 onClick={() => {
