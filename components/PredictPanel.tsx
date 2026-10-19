@@ -276,6 +276,7 @@ function PredictPanel({ version, active = true }: { version: number; active?: bo
           year: picked.year ? Number(picked.year) : undefined,
           media: picked.media,
           predicted: verdict.predicted,
+          note: verdict.why,
         }),
       });
       setAdded(res.ok ? "yes" : "no");
