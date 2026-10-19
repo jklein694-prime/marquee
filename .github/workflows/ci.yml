@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # a commit pushed by another workflow (the visual-baselines refresh) does
+  # not start this one on its own; run it by hand on that branch instead
+  workflow_dispatch:
 
 jobs:
   check:

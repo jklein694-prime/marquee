@@ -5,7 +5,12 @@
 # match the CI runner. Run this workflow on your branch after an intentional
 # visual change: it re-renders the screens on ubuntu-latest and commits the
 # new PNGs to the same branch. Review that commit's images in the PR like any
-# other diff.
+# other diff. GitHub does not start the ci workflow for a commit pushed by a
+# workflow, so after this one lands run "ci" by hand on the branch (Actions →
+# ci → Run workflow), or push any further commit.
+#
+# Because the baselines are the runner's rendering, a laptop's run of the
+# visual gate can differ by a few percent; that is expected, CI is the judge.
 name: visual baselines
 
 on:

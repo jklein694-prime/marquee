@@ -5,10 +5,13 @@ import { openPanel, stubSearch } from "./helpers";
 // Visual regression gate: the phone screens as pixels. The force-graph canvas
 // is non-deterministic (simulation seeds, timing) so it is hidden for the
 // shot; everything around it — the ground, the capsule, the count pill,
-// cards, the scale, chat chrome — is compared. Refresh the baselines on
-// purpose with
+// cards, the scale, chat chrome — is compared. The committed baselines are
+// rendered by the CI runner (the "visual baselines" workflow); refresh them
+// there after an intentional visual change and review the diff in the PR
+// like any other change. A laptop renders text a little differently, so a
+// local run may differ by a few percent: CI is the judge, and
 //   npx playwright test visual --update-snapshots
-// and review the diff in the PR like any other change.
+// gives you local baselines to iterate against until then.
 test.describe("visual", () => {
   test.beforeEach(async ({}, testInfo) => {
     test.skip(testInfo.project.name !== "iphone", "phone only");
