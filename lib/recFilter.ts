@@ -2,10 +2,8 @@ import path from "path";
 import { MOVIES_DIR, mdFiles } from "./vault";
 import { activeSnoozes, notInterested } from "./watchlist";
 
-// loose title equality: page names swap ":" for " -" and snoozes are lowercased,
-// so compare on lowercased alphanumerics only ("Spider-Man - No Way Home (2021)"
-// == "spider-man: no way home (2021)")
-export const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+import { norm } from "./titles";
+export { norm };
 
 // hard gate for recommendation cards: a wiki/movies/ page existing means SEEN
 // (pages exist only for seen titles — ground truth, unlike the trimmed hub

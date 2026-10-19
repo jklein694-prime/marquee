@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
 import { runPredictTurn } from "@/lib/agent";
+import { VERDICT_NUDGE } from "@/lib/score";
 import { norm } from "@/lib/recFilter";
 import { engineName } from "@/lib/engine";
 import { runApiPredictTurn } from "@/lib/engine/api";
@@ -122,7 +123,8 @@ export async function POST(req: Request) {
         }
 
         let lastThinkEmit = 0;
-        const { q, finish } = runPredictTurn(message, emit);
+        let nudged = false;
+        const { q, finish, nudge } = runPredictTurn(message, emit);
         currentQ = q;
         try {
           for await (const m of q) {
@@ -152,6 +154,14 @@ export async function POST(req: Request) {
               }
             }
             if (m.type === "result") {
+              // a clean end with no verdict gets one follow-up in the same
+              // session — the model has already read what it needs
+              if (!sawVerdict && m.subtype === "success" && !nudged && !req.signal.aborted) {
+                nudged = true;
+                emit({ type: "status", label: "settling on a score…" });
+                nudge(VERDICT_NUDGE);
+                continue;
+              }
               if (!sawVerdict)
                 salvage(m.subtype === "success" ? String(m.result ?? "") : "", m.subtype === "success" ? "no verdict produced" : m.subtype);
               break; // streaming input mode: the query idles after a result

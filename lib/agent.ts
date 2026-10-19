@@ -7,6 +7,7 @@ import { recFilter } from "./recFilter";
 import { search, details, similar, discover } from "./tmdb";
 
 export { norm } from "./recFilter";
+import { normalizeScore } from "./score";
 
 const ok = (data: unknown) => ({
   content: [{ type: "text" as const, text: typeof data === "string" ? data : JSON.stringify(data) }],
@@ -173,6 +174,7 @@ export function runTurn(
   return { q, finish };
 }
 
+
 // shared by the chat turn (runTurn) and the predict turn (runPredictTurn); a
 // fresh server instance per turn matches the SDK's per-query lifecycle
 function makeTmdbServer() {
@@ -227,16 +229,40 @@ const tmdbTools = [
 // settingSources (vault hooks are write-oriented), no subagents, no hooks.
 export function runPredictTurn(userText: string, emit: (ev: object) => void) {
   // same held-open input stream as runTurn — SDK MCP servers require streaming
-  // input mode or in-process tool calls die with "Stream closed"
-  let finish!: () => void;
-  const turnDone = new Promise<void>((resolve) => (finish = resolve));
+  // input mode or in-process tool calls die with "Stream closed". The stream
+  // also carries follow-ups: when the model ends its turn without a verdict,
+  // the route nudges it once and the same session answers with the context
+  // it already read.
+  const queue: string[] = [];
+  let done = false;
+  let wake: (() => void) | null = null;
+  const signal = () => {
+    wake?.();
+    wake = null;
+  };
+  const finish = () => {
+    done = true;
+    signal();
+  };
+  const nudge = (text: string) => {
+    queue.push(text);
+    signal();
+  };
   async function* promptStream() {
     yield {
       type: "user" as const,
       message: { role: "user" as const, content: userText },
       parent_tool_use_id: null,
     };
-    await turnDone;
+    for (;;) {
+      const next = queue.shift();
+      if (next !== undefined) {
+        yield { type: "user" as const, message: { role: "user" as const, content: next }, parent_tool_use_id: null };
+        continue;
+      }
+      if (done) return;
+      await new Promise<void>((r) => (wake = r));
+    }
   }
 
   const predict = createSdkMcpServer({
@@ -258,16 +284,15 @@ export function runPredictTurn(userText: string, emit: (ev: object) => void) {
         "verdict",
         "Deliver the final projected score. Call EXACTLY ONCE, then end your turn.",
         {
-          predicted: z
-            .string()
-            .regex(/^\d+(?:-\d+)?$/)
-            .describe('"8" or a range "8-9" — same format the watchlist requires'),
+          predicted: z.string().describe('"8" or a range "8-9" — same format the watchlist requires'),
           why: z.string().describe("2-3 plain sentences citing named categories and comparable rated titles"),
           seen: z.boolean().optional().describe("true when a wiki page shows the user already saw it"),
           actual: z.number().optional().describe("their actual /10 rating when seen"),
         },
         async (a) => {
-          emit({ type: "verdict", ...a });
+          const predicted = normalizeScore(a.predicted);
+          if (!predicted) return ok('predicted must be a score 1-10 like "8" or a range like "8-9" — call verdict again');
+          emit({ type: "verdict", ...a, predicted });
           return ok("Recorded. End your turn now.");
         }
       ),
@@ -293,5 +318,5 @@ export function runPredictTurn(userText: string, emit: (ev: object) => void) {
       ],
     },
   });
-  return { q, finish };
+  return { q, finish, nudge };
 }

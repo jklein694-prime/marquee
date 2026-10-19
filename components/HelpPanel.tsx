@@ -121,12 +121,15 @@ new favorite becomes a fresh branch of your taste instead.`,
 - **My services** (top) — unselect the streaming services you don't pay for to hide
   picks available *only* there. It's a view filter, saved in your browser; nothing is
   deleted and titles with no streaming info always stay visible.
-- **My list** — titles you've saved, ranked. Each card has one row: **Watched it**,
-  **Trailer**, and the **arrows** to reorder (on a desktop you can also drag a card).
-  The **⋮** menu holds **Remove** and **Not interested** (each with an optional reason).
+- **My list** — titles you've saved, ranked. Each card shows where it streams,
+  **Louie predicts** (his projected score), and his reason; **tap the reason** to read
+  it in full with the synopsis. One row of actions: **Watched it**, **Trailer**, and
+  the **arrows** to reorder (on a desktop you can also drag a card). The **⋮** menu
+  holds **Remove** and **Not interested** (each with an optional reason).
 - **Louie suggests** — Louie's ranked queue, best fit first, each with where it
   streams and a **"Louie predicts"** score. The row is **Save**, **Watched it**, and
-  **Not now**; the **⋮** menu holds **Not interested**.
+  **Not now**; the **⋮** menu holds **Not interested**. Anything on your list never
+  appears here.
 - **Not interested** (collapsible, at the bottom) — your permanent vetoes, each with a
   **Remove** button to lift it.
 
