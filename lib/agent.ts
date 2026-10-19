@@ -77,7 +77,7 @@ export function runTurn(
             z.object({
               title: z.string(),
               year: z.number(),
-              why: z.string().describe("One line: why it fits their answers and taste graph"),
+              why: z.string().describe("One sentence, second person: why THIS user would like it, naming a category they rate high or a title they loved — never a bare premise or tagline"),
               predicted: z
                 .string()
                 .regex(/^\d+(?:-\d+)?$/)
