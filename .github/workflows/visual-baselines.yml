@@ -1,0 +1,43 @@
+# Refresh the visual-regression baselines on the machine that checks them.
+#
+# The gate (tests/e2e/visual.spec.ts) compares pixels, and text rasterizes a
+# little differently on every OS, so baselines made on a laptop never quite
+# match the CI runner. Run this workflow on your branch after an intentional
+# visual change: it re-renders the screens on ubuntu-latest and commits the
+# new PNGs to the same branch. Review that commit's images in the PR like any
+# other diff.
+name: visual baselines
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    env:
+      CI: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - run: npx playwright test visual --update-snapshots all
+      - name: Commit the refreshed baselines
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/e2e/visual.spec.ts-snapshots
+          if git diff --cached --quiet; then
+            echo "baselines unchanged"
+            exit 0
+          fi
+          git commit -m "Refresh visual baselines from the CI renderer"
+          git push

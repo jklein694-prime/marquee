@@ -18,7 +18,11 @@ test.describe("visual", () => {
     expect(page).toHaveScreenshot(`${name}.png`, {
       stylePath: path.join(__dirname, "visual.css"),
       animations: "disabled",
-      maxDiffPixelRatio: 0.02,
+      // text rasterizes a little differently from one Linux (freetype) to
+      // the next, so single pixels may drift in colour; a layout or token
+      // regression moves whole regions and still fails
+      threshold: 0.35,
+      maxDiffPixelRatio: 0.03,
     });
 
   test.beforeEach(async ({ page }) => {
